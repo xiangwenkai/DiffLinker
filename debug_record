@@ -1,0 +1,14 @@
+1.训练自己用geom drugs构造的数据时(取部分可能有结合的原子作为fragment，其余为linker)，sampling过程中x矩阵中出现大量nan值
+
+* ========= 原因 ========= *
+src/lightning   sample_chain函数中：
+template_data = create_templates_for_linker_generation(data, linker_sizes)
+该语句生成的template_data不合法（anchor全为0，fragment_mask全为0）
+
+进一步观察发现，difflinker默认构造的数据中，fragment_mask向量中的1必定排在前面，而我构造的数据中，fragment_mask向量中的1随机排列。
+而create_templates_for_linker_generation在构造新模板时，之间保留了前fragment size个元素
+
+debug:
+重写了src/datasets.py中的create_templates_for_linker_generation函数和create_template函数
+
+2.
