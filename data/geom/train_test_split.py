@@ -9,18 +9,21 @@ from tqdm import tqdm
 def split(table_path, train_path, val_path, test_path):
     table = pd.read_csv(table_path)
     table = table.drop_duplicates(['molecule', 'linker'])
-
+    table = table.dropna()
     linker_sizes = []
     fragment_sizes = []
     number_of_linkers = []
     number_of_fragments = []
     for linker_smi, fragments_smi in tqdm(table[['linker', 'fragments']].values):
-        linker = Chem.MolFromSmiles(linker_smi)
-        fragments = Chem.MolFromSmiles(fragments_smi)
-        linker_sizes.append(linker.GetNumAtoms())
-        fragment_sizes.append(fragments.GetNumAtoms())
-        number_of_linkers.append(len(linker_smi.split('.')))
-        number_of_fragments.append(len(fragments_smi.split('.')))
+        try:
+            linker = Chem.MolFromSmiles(linker_smi)
+            fragments = Chem.MolFromSmiles(fragments_smi)
+            linker_sizes.append(linker.GetNumAtoms())
+            fragment_sizes.append(fragments.GetNumAtoms())
+            number_of_linkers.append(len(linker_smi.split('.')))
+            number_of_fragments.append(len(fragments_smi.split('.')))
+        except:
+            print(f"Error! Linker:{linker_smi}; Fragments: {fragments_smi}")
 
     table['linker_size'] = linker_sizes
     table['fragment_size'] = fragment_sizes
