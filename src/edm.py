@@ -42,7 +42,6 @@ class EDM(torch.nn.Module):
         # Normalization and concatenation
         x, h = self.normalize(x, h)
         xh = torch.cat([x, h], dim=2)
-
         # Volume change loss term
         delta_log_px = self.delta_log_px(linker_mask).mean()
 

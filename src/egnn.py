@@ -378,7 +378,6 @@ class Dynamics(nn.Module):
         - edge_mask: (B*N*N, 1)
         - context: (B, N, C)
         """
-
         bs, n_nodes = xh.shape[0], xh.shape[1]
         edges = self.get_edges(n_nodes, bs)  # (2, B*N)
         node_mask = node_mask.view(bs * n_nodes, 1)  # (B*N, 1)

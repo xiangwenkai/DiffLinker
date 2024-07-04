@@ -475,11 +475,19 @@ def get_dataloader(dataset, batch_size, collate_fn=collate, shuffle=False):
     return DataLoader(dataset, batch_size, collate_fn=collate_fn, shuffle=shuffle)
 
 
-def create_template(tensor, fragment_size, linker_size, fill=0):
-    values_to_keep = tensor[:fragment_size]
-    values_to_add = torch.ones(linker_size, tensor.shape[1], dtype=values_to_keep.dtype, device=values_to_keep.device)
-    values_to_add = values_to_add * fill
-    return torch.cat([values_to_keep, values_to_add], dim=0)
+# def create_template(tensor, fragment_size, linker_size, fill=0):
+#     values_to_keep = tensor[:fragment_size]
+#     values_to_add = torch.ones(linker_size, tensor.shape[1], dtype=values_to_keep.dtype, device=values_to_keep.device)
+#     values_to_add = values_to_add * fill
+#     return torch.cat([values_to_keep, values_to_add], dim=0)
+
+def create_template(tensor, fragment_size, linker_size, frag_index, fill=0):
+    res = torch.ones(fragment_size+linker_size, tensor.shape[1], dtype=tensor.dtype, device=tensor.device)
+    res = res * fill
+    index_keep = frag_index[:fragment_size]
+    values_to_keep = tensor[index_keep]
+    res[index_keep] = values_to_keep
+    return res
 
 
 def create_templates_for_linker_generation(data, linker_sizes):
@@ -491,6 +499,7 @@ def create_templates_for_linker_generation(data, linker_sizes):
     for i, linker_size in enumerate(linker_sizes):
         data_dict = {}
         fragment_mask = data['fragment_mask'][i].squeeze()
+        fragment_index = (fragment_mask == 1.).nonzero(as_tuple=True)[0]
         fragment_size = fragment_mask.sum().int()
         for k, v in data.items():
             if k == 'num_atoms':
@@ -504,7 +513,7 @@ def create_templates_for_linker_generation(data, linker_sizes):
             if k in const.DATA_ATTRS_TO_PAD:
                 # Should write fragment-related data + (zeros x linker_size)
                 fill_value = 1 if k == 'linker_mask' else 0
-                template = create_template(v[i], fragment_size, linker_size, fill=fill_value)
+                template = create_template(v[i], fragment_size, linker_size, fragment_index, fill=fill_value)
                 if k in const.DATA_ATTRS_TO_ADD_LAST_DIM:
                     template = template.squeeze(-1)
                 data_dict[k] = template

@@ -223,5 +223,6 @@ def visualize_chain(
     gif_path = dirname + '/output.gif'
     imageio.mimsave(gif_path, imgs, subrectangles=True)
 
+    wandb = None
     if wandb is not None:
         wandb.log({mode: [wandb.Video(gif_path, caption=gif_path)]})
