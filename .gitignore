@@ -4,3 +4,5 @@ trajectories
 logs
 formatted
 wandb
+.idea
+__pycache__
