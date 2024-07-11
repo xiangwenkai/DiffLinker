@@ -511,9 +511,12 @@ def create_templates_for_linker_generation(data, linker_sizes):
                 data_dict[k] = v[i]
                 continue
             if k in const.DATA_ATTRS_TO_PAD:
-                # Should write fragment-related data + (zeros x linker_size)
-                fill_value = 1 if k == 'linker_mask' else 0
-                template = create_template(v[i], fragment_size, linker_size, fragment_index, fill=fill_value)
+                if k == 'nci':
+                    template = v[i][:fragment_size]
+                else:
+                    # Should write fragment-related data + (zeros x linker_size)
+                    fill_value = 1 if k == 'linker_mask' else 0
+                    template = create_template(v[i], fragment_size, linker_size, fragment_index, fill=fill_value)
                 if k in const.DATA_ATTRS_TO_ADD_LAST_DIM:
                     template = template.squeeze(-1)
                 data_dict[k] = template

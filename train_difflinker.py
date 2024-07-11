@@ -7,7 +7,7 @@ import yaml
 from datetime import datetime
 from pytorch_lightning import Trainer, callbacks, loggers
 
-from src.const import NUMBER_OF_ATOM_TYPES, GEOM_NUMBER_OF_ATOM_TYPES
+from src.const import NUMBER_OF_ATOM_TYPES, GEOM_NUMBER_OF_ATOM_TYPES, NCI_TYPE
 from src.lightning import DDPM
 from src.utils import disable_rdkit_logging, Logger
 
@@ -51,6 +51,7 @@ def main(args):
     in_node_nf = number_of_atoms + args.include_charges
     anchors_context = not args.remove_anchors_context
     context_node_nf = 2 if anchors_context else 1
+    context_node_nf += NCI_TYPE + 1  # nci
     if '.' in args.train_data_prefix:
         context_node_nf += 1
 

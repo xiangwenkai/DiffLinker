@@ -5,7 +5,7 @@ import torch
 import wandb
 
 from src import metrics, utils, delinker
-from src.const import LINKER_SIZE_DIST
+from src.const import LINKER_SIZE_DIST, NCI_TYPE
 from src.egnn import Dynamics, DynamicsWithPockets
 from src.edm import EDM, InpaintingEDM
 from src.datasets import (
@@ -149,12 +149,17 @@ class DDPM(pl.LightningModule):
         anchors = data['anchors']
         fragment_mask = data['fragment_mask']
         linker_mask = data['linker_mask']
-
+        nci = data['nci']  # nci
+        padding = (0, 0, 0, x.shape[1] - nci.shape[1])  # nci
+        nci = torch.nn.functional.pad(nci, padding, "constant", value=0)  # nci
+        nci = torch.nn.functional.one_hot(nci.squeeze(2), num_classes=NCI_TYPE+1)  # nci
         # Anchors and fragments labels are used as context
         if self.anchors_context:
-            context = torch.cat([anchors, fragment_mask], dim=-1)
+            # context = torch.cat([anchors, fragment_mask], dim=-1)
+            context = torch.cat([anchors, fragment_mask, nci], dim=-1)  # nci
         else:
-            context = fragment_mask
+            # context = fragment_mask
+            context = torch.cat([fragment_mask, nci], dim=-1)  # nci
 
         # Add information about pocket to the context
         if isinstance(self.train_dataset, MOADDataset):
@@ -162,9 +167,11 @@ class DDPM(pl.LightningModule):
             fragment_only_mask = data['fragment_only_mask']
             pocket_only_mask = fragment_pocket_mask - fragment_only_mask
             if self.anchors_context:
-                context = torch.cat([anchors, fragment_only_mask, pocket_only_mask], dim=-1)
+                # context = torch.cat([anchors, fragment_only_mask, pocket_only_mask], dim=-1)
+                context = torch.cat([anchors, fragment_only_mask, pocket_only_mask, nci], dim=-1)  # nci
             else:
-                context = torch.cat([fragment_only_mask, pocket_only_mask], dim=-1)
+                # context = torch.cat([fragment_only_mask, pocket_only_mask], dim=-1)
+                context = torch.cat([anchors, fragment_only_mask, pocket_only_mask, nci], dim=-1)  # nci
 
         # Removing COM of fragment from the atom coordinates
         if self.inpainting:
@@ -416,12 +423,17 @@ class DDPM(pl.LightningModule):
         anchors = template_data['anchors']
         fragment_mask = template_data['fragment_mask']
         linker_mask = template_data['linker_mask']
-
+        nci = template_data['nci']  # nci
+        padding = (0, 0, 0, x.shape[1] - nci.shape[1])  # nci
+        nci = torch.nn.functional.pad(nci, padding, "constant", value=0)  # nci
+        nci = torch.nn.functional.one_hot(nci.squeeze(2), num_classes=NCI_TYPE + 1)  # nci
         # Anchors and fragments labels are used as context
         if self.anchors_context:
-            context = torch.cat([anchors, fragment_mask], dim=-1)
+            # context = torch.cat([anchors, fragment_mask], dim=-1)
+            context = torch.cat([anchors, fragment_mask, nci], dim=-1)  # nci
         else:
-            context = fragment_mask
+            # context = fragment_mask
+            context = torch.cat([fragment_mask, nci], dim=-1)  # nci
 
         # Add information about pocket to the context
         if '.' in self.train_data_prefix:
@@ -429,9 +441,11 @@ class DDPM(pl.LightningModule):
             fragment_only_mask = template_data['fragment_only_mask']
             pocket_only_mask = fragment_pocket_mask - fragment_only_mask
             if self.anchors_context:
-                context = torch.cat([anchors, fragment_only_mask, pocket_only_mask], dim=-1)
+                # context = torch.cat([anchors, fragment_only_mask, pocket_only_mask], dim=-1)
+                context = torch.cat([anchors, fragment_only_mask, pocket_only_mask, nci], dim=-1)  # nci
             else:
-                context = torch.cat([fragment_only_mask, pocket_only_mask], dim=-1)
+                # context = torch.cat([fragment_only_mask, pocket_only_mask], dim=-1)
+                context = torch.cat([fragment_only_mask, pocket_only_mask, nci], dim=-1)  # nci
 
         # Removing COM of fragment from the atom coordinates
         if self.inpainting:

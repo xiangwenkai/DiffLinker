@@ -1,7 +1,9 @@
-1.训练自己用geom drugs构造的数据时(取部分可能有结合的原子作为fragment，其余为linker)，sampling过程中x矩阵中出现大量nan值
+1.***
+* ========= 描述 ========= *
+训练自己用geom drugs构造的数据时(取部分可能有结合的原子作为fragment，其余为linker)，sampling过程中x矩阵中出现大量nan值
 
 * ========= 原因 ========= *
-src/lightning   sample_chain函数中：
+src/lightning.py   sample_chain函数中：
 template_data = create_templates_for_linker_generation(data, linker_sizes)
 该语句生成的template_data不合法（anchor全为0，fragment_mask全为0）
 
@@ -11,4 +13,40 @@ template_data = create_templates_for_linker_generation(data, linker_sizes)
 debug:
 重写了src/datasets.py中的create_templates_for_linker_generation函数和create_template函数
 
-2.
+2.***
+* ========= 描述 ========= *
+对于初始固定的1-10个初始条件原子，加入这些原子的预期nci信息
+* ========= 改动 ========= *
+src/lighting.py
+line 8; 152-155; 159; 162; 171; 174; 426-429; 433; 436; 445; 448
+
+generate.py
+line 62; 133-135; 146; 198
+
+generate_with_pocket.py
+line 114; 209-211; 242; 304
+
+src/datasets.py
+line 514-519
+
+src/const.py
+line 8; 43; 46
+
+train_difflinker.py
+line 54
+
+
+3.**
+* ========= 描述 ========= *
+从头处理数据的代码
+
+* ========= 改动 ========= *
+src/datasets.py
+ZincDataset类中的preprocess函数； MOADDataset类中的preprocess函数；
+TODO
+
+4.****
+* ========= 描述 ========= *
+用预训练的生成代码提升基于口袋的分子生成的效果。需要思考代码架构并执行
+* ========= 改动 ========= *
+TODO

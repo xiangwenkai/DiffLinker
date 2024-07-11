@@ -183,19 +183,26 @@ def fragment_by_brics(smiles, min_frag_size, max_frag_size, num_frags, linker_ty
 # #################################################################################### #
 # 函数：识别氢键给体和受体
 def find_h_bond_donors_and_acceptors(mol):
-    h_bond_donors = []
-    h_bond_acceptors = []
+    if mol is None:
+        return "Invalid SMILES"
 
+    donors = []
+    acceptors = []
+
+    # 遍历分子中的每个原子
     for atom in mol.GetAtoms():
-        if atom.GetAtomicNum() == 1:  # H atom
-            for neighbor in atom.GetNeighbors():
-                if neighbor.GetAtomicNum() in [7, 8]:  # N, O
-                    h_bond_donors.append(atom.GetIdx())
-        elif atom.GetAtomicNum() in [7, 8]:  # N, O
-            if Lipinski.NumHAcceptors(mol) > 0:
-                h_bond_acceptors.append(atom.GetIdx())
+        atom_idx = atom.GetIdx()
+        atom_num = atom.GetAtomicNum()
+        num_hydrogens = atom.GetTotalNumHs()
 
-    return h_bond_donors, h_bond_acceptors
+        # 判定氢键供体：N or O 并且至少有一个隐含氢
+        if atom_num in [7, 8] and num_hydrogens > 0:
+            donors.append(atom_idx)
+        # 判定氢键受体：N, O, or F 并且没有隐含氢或仅部分隐含氢（排除氢键供体）
+        elif atom_num in [7, 8, 9] and (atom_num != 7 or num_hydrogens == 0):  # N, O, 或 F并且无隐含氢
+            acceptors.append(atom_idx)
+
+    return donors, acceptors
 
 
 # 函数：识别疏水基团
@@ -264,7 +271,7 @@ def sort_bind_atom(mol, h_bond_donors, h_bond_acceptors, hydrophobic_groups, pos
     # 不同作用的得分不同
     for idx in all_idx:
         if idx in h_bond_donors or idx in h_bond_acceptors:
-            score[idx] += 4
+            score[idx] += 5
         if idx in hydrophobic_groups:
             score[idx] += 3
         if idx in positive_sites or idx in negative_sites:
@@ -295,7 +302,7 @@ def sort_bind_atom(mol, h_bond_donors, h_bond_acceptors, hydrophobic_groups, pos
 
 def run(base_path="E:/DATA/dgl_graphormer/geom_drugs", output_path='E:/DATA/dgl_graphormer/geom_drugs/processed'):
     drugs_file = os.path.join(base_path, "rdkit_folder/summary_drugs.json")
-    sample_numbers = {3: 3, 4: 3, 5: 2, 6: 2, 7: 1, 8: 1, 9: 1, 10: 1}
+    sample_numbers = {1: 1, 2: 1, 3: 5, 4: 5, 5: 3, 6: 1, 7: 1, 8: 1, 9: 1, 10: 1}
     atom_types = {'C': 0, 'O': 1, 'N': 2, 'F': 3, 'S': 4, 'Cl': 5, 'Br': 6, 'I': 7, 'P': 8}
     n_types = 9
     with open(drugs_file, "r") as f:
@@ -372,10 +379,33 @@ def run(base_path="E:/DATA/dgl_graphormer/geom_drugs", output_path='E:/DATA/dgl_
         positive_sites, negative_sites = find_electrostatic_interactions(mol)
         coordination_sites = find_coordination_sites(mol)
 
+        # 作用力类型
+        types_map = {}
+        for idx in h_bond_donors:
+            types_map[idx] = 1
+        for idx in h_bond_acceptors:
+            if idx not in types_map:
+                types_map[idx] = 2
+        for idx in h_bond_acceptors:
+            if idx not in types_map:
+                types_map[idx] = 2
+        for idx in hydrophobic_groups:
+            if idx not in types_map:
+                types_map[idx] = 3
+        for idx in positive_sites:
+            if idx not in types_map:
+                types_map[idx] = 4
+        for idx in negative_sites:
+            if idx not in types_map:
+                types_map[idx] = 5
+        for idx in coordination_sites:
+            if idx not in types_map:
+                types_map[idx] = 6
+
         # 候选结合原子
         candidate_atoms = sort_bind_atom(mol, h_bond_donors, h_bond_acceptors, hydrophobic_groups, positive_sites,
                                          negative_sites, coordination_sites)
-        if len(candidate_atoms) < 3:
+        if len(candidate_atoms) < 2:
             continue
 
         # 采样需要分离的原子索引
@@ -387,6 +417,9 @@ def run(base_path="E:/DATA/dgl_graphormer/geom_drugs", output_path='E:/DATA/dgl_
                     atom_indexes.append(atom_index)
 
         for atom_index in atom_indexes:
+            # nci
+            nci = torch.tensor([types_map[x] for x in atom_index])
+
             atom_index = torch.tensor(atom_index)
             anchors = torch.zeros(num_nodes)
             anchors[atom_index] = 1.
@@ -396,20 +429,20 @@ def run(base_path="E:/DATA/dgl_graphormer/geom_drugs", output_path='E:/DATA/dgl_
             fragment_mask = anchors.clone()
             # ======================== linker_mask ========================
             linker_mask = 1. - fragment_mask
-            if rand < 0.0025:
+            if rand < 0.0005:
                 test.append({'uuid': uuid_te, 'name': name, 'positions': positions, 'one_hot': one_hot,
                              'charges': charges, 'anchors': anchors, 'fragment_mask': fragment_mask,
-                             'linker_mask': linker_mask, 'num_atoms': num_nodes})
+                             'linker_mask': linker_mask, 'num_atoms': num_nodes, 'nci': nci})
                 uuid_te += 1
-            elif rand < 0.005:
+            elif rand < 0.001:
                 val.append({'uuid': uuid_val, 'name': name, 'positions': positions, 'one_hot': one_hot,
                             'charges': charges, 'anchors': anchors, 'fragment_mask': fragment_mask,
-                            'linker_mask': linker_mask, 'num_atoms': num_nodes})
+                            'linker_mask': linker_mask, 'num_atoms': num_nodes, 'nci': nci})
                 uuid_val += 1
             else:
                 train.append({'uuid': uuid_tr, 'name': name, 'positions': positions, 'one_hot': one_hot,
                               'charges': charges, 'anchors': anchors, 'fragment_mask': fragment_mask,
-                              'linker_mask': linker_mask, 'num_atoms': num_nodes})
+                              'linker_mask': linker_mask, 'num_atoms': num_nodes, 'nci': nci})
                 uuid_tr += 1
     random.shuffle(train)
     random.shuffle(val)

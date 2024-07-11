@@ -59,7 +59,7 @@ def read_molecule(path):
     raise Exception('Unknown file extension')
 
 
-def main(input_path, model, output_dir, n_samples, n_steps, linker_size, anchors):
+def main(input_path, model, output_dir, n_samples, n_steps, linker_size, anchors, nci):
 
     # Setup
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -130,7 +130,9 @@ def main(input_path, model, output_dir, n_samples, n_steps, linker_size, anchors
     if anchors is not None:
         for anchor in anchors.split(','):
             anchor_flags[int(anchor.strip()) - 1] = 1
-
+    nci_flags = np.zeros_like(charges)  # nci
+    for i, nci_type in enumerate(nci.split(',')):  # nci
+        nci_flags[i] = nci_type  # nci
     dataset = [{
         'uuid': '0',
         'name': '0',
@@ -141,6 +143,7 @@ def main(input_path, model, output_dir, n_samples, n_steps, linker_size, anchors
         'fragment_mask': torch.tensor(fragment_mask, dtype=const.TORCH_FLOAT, device=device),
         'linker_mask': torch.tensor(linker_mask, dtype=const.TORCH_FLOAT, device=device),
         'num_atoms': len(positions),
+        'nci': nci_flags,
     }] * n_samples
     global_batch_size = min(n_samples, 64)
     dataloader = get_dataloader(dataset, batch_size=global_batch_size, collate_fn=collate_with_fragment_edges)
@@ -192,5 +195,6 @@ if __name__ == '__main__':
         n_steps=args.n_steps,
         linker_size=args.linker_size,
         anchors=args.anchors,
+        nci=args.nci
     )
 

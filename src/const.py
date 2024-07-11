@@ -5,7 +5,7 @@ from rdkit import Chem
 
 TORCH_FLOAT = torch.float32
 TORCH_INT = torch.int8
-
+NCI_TYPE = 6
 # #################################################################################### #
 # ####################################### ZINC ####################################### #
 # #################################################################################### #
@@ -40,10 +40,10 @@ DATA_LIST_ATTRS = {
     'uuid', 'name', 'fragments_smi', 'linker_smi', 'num_atoms'
 }
 DATA_ATTRS_TO_PAD = {
-    'positions', 'one_hot', 'charges', 'anchors', 'fragment_mask', 'linker_mask', 'pocket_mask', 'fragment_only_mask'
+    'positions', 'one_hot', 'charges', 'anchors', 'fragment_mask', 'linker_mask', 'pocket_mask', 'fragment_only_mask', 'nci'
 }
 DATA_ATTRS_TO_ADD_LAST_DIM = {
-    'charges', 'anchors', 'fragment_mask', 'linker_mask', 'pocket_mask', 'fragment_only_mask'
+    'charges', 'anchors', 'fragment_mask', 'linker_mask', 'pocket_mask', 'fragment_only_mask', 'nci'
 }
 
 # Distribution of linker size in train data
