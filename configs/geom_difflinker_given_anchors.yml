@@ -11,7 +11,7 @@ enable_progress_bar: False
 
 model: egnn_dynamics
 lr: 2.0e-4
-batch_size: 1024
+batch_size: 768
 n_layers: 6
 n_epochs: 200
 test_epochs: 5
