@@ -39,7 +39,7 @@ def main(args):
     torch_device = 'cuda:0' if args.device == 'gpu' else 'cpu'
     wandb_logger = loggers.WandbLogger(
         save_dir=args.logs,
-        project='e3_ddpm_linker_design',
+        project='e3_ddpm_linker_custom',
         name=experiment,
         id=experiment,
         resume='must' if args.resume is not None else 'allow',
