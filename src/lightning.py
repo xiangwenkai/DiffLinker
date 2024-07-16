@@ -150,9 +150,9 @@ class DDPM(pl.LightningModule):
         fragment_mask = data['fragment_mask']
         linker_mask = data['linker_mask']
         nci = data['nci']  # nci
-        padding = (0, 0, 0, x.shape[1] - nci.shape[1])  # nci
-        nci = torch.nn.functional.pad(nci, padding, "constant", value=0)  # nci
-        nci = torch.nn.functional.one_hot(nci.squeeze(2), num_classes=NCI_TYPE+1)  # nci
+        # padding = (0, 0, 0, x.shape[1] - nci.shape[1])  # nci
+        # nci = torch.nn.functional.pad(nci, padding, "constant", value=0)  # nci
+        # nci = torch.nn.functional.one_hot(nci.squeeze(2), num_classes=NCI_TYPE+1)  # nci
         # Anchors and fragments labels are used as context
         if self.anchors_context:
             # context = torch.cat([anchors, fragment_mask], dim=-1)
@@ -424,9 +424,9 @@ class DDPM(pl.LightningModule):
         fragment_mask = template_data['fragment_mask']
         linker_mask = template_data['linker_mask']
         nci = template_data['nci']  # nci
-        padding = (0, 0, 0, x.shape[1] - nci.shape[1])  # nci
-        nci = torch.nn.functional.pad(nci, padding, "constant", value=0)  # nci
-        nci = torch.nn.functional.one_hot(nci.squeeze(2), num_classes=NCI_TYPE + 1)  # nci
+        # padding = (0, 0, 0, x.shape[1] - nci.shape[1])  # nci
+        # nci = torch.nn.functional.pad(nci, padding, "constant", value=0)  # nci
+        # nci = torch.nn.functional.one_hot(nci.squeeze(2), num_classes=NCI_TYPE + 1)  # nci
         # Anchors and fragments labels are used as context
         if self.anchors_context:
             # context = torch.cat([anchors, fragment_mask], dim=-1)

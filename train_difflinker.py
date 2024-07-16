@@ -37,21 +37,21 @@ def main(args):
     samples_dir = os.path.join(args.logs, 'samples', experiment)
 
     torch_device = 'cuda:0' if args.device == 'gpu' else 'cpu'
-    wandb_logger = loggers.WandbLogger(
-        save_dir=args.logs,
-        project='e3_ddpm_linker_design',
-        name=experiment,
-        id=experiment,
-        resume='must' if args.resume is not None else 'allow',
-        entity=args.wandb_entity,
-    )
+    # wandb_logger = loggers.WandbLogger(
+    #     save_dir=args.logs,
+    #     project='e3_ddpm_linker_design',
+    #     name=experiment,
+    #     id=experiment,
+    #     resume='must' if args.resume is not None else 'allow',
+    #     entity=args.wandb_entity,
+    # )
 
     is_geom = ('geom' in args.train_data_prefix) or ('MOAD' in args.train_data_prefix)
     number_of_atoms = GEOM_NUMBER_OF_ATOM_TYPES if is_geom else NUMBER_OF_ATOM_TYPES
     in_node_nf = number_of_atoms + args.include_charges
     anchors_context = not args.remove_anchors_context
     context_node_nf = 2 if anchors_context else 1
-    context_node_nf += NCI_TYPE + 1  # nci
+    context_node_nf += 1  # nci
     if '.' in args.train_data_prefix:
         context_node_nf += 1
 
@@ -92,6 +92,8 @@ def main(args):
         inpainting=args.inpainting,
         anchors_context=anchors_context,
     )
+    # ddpm_pre = DDPM.load_from_checkpoint('models/teste17.ckpt', map_location='cpu') # ddpm_pre.named_parameters().__next__()
+    # ddpm.edm = ddpm_pre.edm
     checkpoint_callback = callbacks.ModelCheckpoint(
         dirpath=checkpoints_dir,
         filename=experiment + '_{epoch:02d}',
@@ -100,8 +102,8 @@ def main(args):
     )
     trainer = Trainer(
         max_epochs=args.n_epochs,
-        logger=wandb_logger,
-        # logger=False,
+        # logger=wandb_logger,
+        logger=False,
         callbacks=checkpoint_callback,
         accelerator=args.device,
         devices=1,
