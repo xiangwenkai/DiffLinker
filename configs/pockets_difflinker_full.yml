@@ -1,7 +1,7 @@
 exp_name: 'pockets_difflinker_full'
 data: datasets
-train_data_prefix: MOAD_train.full
-val_data_prefix: MOAD_val.full
+train_data_prefix: crossdock_train_part1.full
+val_data_prefix: crossdock_val_part1.full
 checkpoints: models
 logs: logs
 device: gpu
@@ -11,7 +11,7 @@ enable_progress_bar: False
 
 model: egnn_dynamics
 lr: 2.0e-4
-batch_size: 32
+batch_size: 64
 n_layers: 6
 n_epochs: 1000
 test_epochs: 20
