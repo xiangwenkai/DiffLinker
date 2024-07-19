@@ -473,7 +473,7 @@ def sample_nci(n_nci, nci_prob, lig_atom_id, nci_type, k_sample, t):
 def run():
     pocket_mode = 'full'  # 'bb'
     is_geom = False
-    sample_numbers = {1: 1, 2: 3, 3: 8, 4: 5, 5: 3, 6: 1}
+    sample_numbers = {1: 1, 2: 2, 3: 5, 4: 4, 5: 2, 6: 1}
     sample_weight = {1: 1, 2: 1, 3: 1, 4: 0.5, 5: 0.5, 6: 0.5, 7: 0.3, 8: 0.3}
     output_path = '/root/data/crossdock2020_pmdm'
 
@@ -499,19 +499,16 @@ def run():
 
             # Parsing mol data
             try:
-                mol = Chem.MolFromMolFile(mol_path)
+                mol = Chem.MolFromMolFile(mol_path, sanitize=False)
                 # Chem.SanitizeMol(mol)
-                # temp = Chem.MolFromMolFile('datasets/FAD_model.sdf')
-                # AllChem.AssignBondOrdersFromTemplate(temp, mol)
-                mol = Chem.RemoveHs(mol)
+                mol.UpdatePropertyCache(strict=False)
+                # mol = Chem.RemoveHs(mol)
                 smi = Chem.MolToSmiles(mol)
                 name = smi
                 num_nodes = mol.GetNumAtoms()
                 positions, one_hot, charges = parse_molecule(mol, is_geom=is_geom)
             except:
                 n_fail += 1
-                # if n_fail % 100 == 0:
-                #     print(f"Fail number: {n_fail}")
                 continue
             # Parsing pocket data
             pocket_data = get_pocket(pdb_path)
@@ -556,14 +553,11 @@ def run():
                 del train, val, test
                 train, val, test = [], [], []
 
+
             for atom_index, nci_type in zip(atom_indexes, nci_types):
                 link_index = list(set([x for x in range(num_nodes)]) - set(atom_index))
 
                 atom_index = torch.tensor(atom_index, dtype=int)
-                anchors = torch.zeros(num_nodes)
-                anchors[atom_index] = 1.
-                if torch.isnan(anchors).any():
-                    continue
 
                 # frag charges; frag one_hot; frag pos
                 frag_charges = charges[atom_index]
@@ -578,6 +572,9 @@ def run():
                 positions_ = torch.cat([frag_pos, pocket_pos, link_pos])
                 one_hot_ = torch.cat([frag_one_hot, pocket_one_hot, link_one_hot])
                 charges_ = torch.cat([frag_charges, pocket_charges, link_charges])
+
+                anchors = torch.zeros_like(charges_)
+                anchors[atom_index] = 1.
 
                 # nci
                 nci = torch.zeros_like(charges_)
@@ -611,23 +608,26 @@ def run():
                                  'linker_mask': linker_mask_, 'num_atoms': num_nodes, 'nci': nci})
                     uuid_te += 1
                 elif rand < 0.001:
-                    val.append({'uuid': uuid_val, 'name': name, 'positions': positions_, 'one_hot': one_hot_,
-                                'charges': charges_, 'anchors': anchors, 'fragment_mask': fragment_mask_,
-                                'linker_mask': linker_mask_, 'num_atoms': num_nodes, 'nci': nci})
+                    val.append({'uuid': uuid_te, 'name': name, 'positions': positions_, 'one_hot': one_hot_,
+                                 'charges': charges_, 'anchors': anchors, 'fragment_only_mask': fragment_only_mask_,
+                                 'pocket_mask': pocket_mask_, 'fragment_mask': fragment_mask_,
+                                 'linker_mask': linker_mask_, 'num_atoms': num_nodes, 'nci': nci})
                     uuid_val += 1
                 else:
-                    train.append({'uuid': uuid_tr, 'name': name, 'positions': positions_, 'one_hot': one_hot_,
-                                  'charges': charges_, 'anchors': anchors, 'fragment_mask': fragment_mask_,
-                                  'linker_mask': linker_mask_, 'num_atoms': num_nodes, 'nci': nci})
+                    train.append({'uuid': uuid_te, 'name': name, 'positions': positions_, 'one_hot': one_hot_,
+                                 'charges': charges_, 'anchors': anchors, 'fragment_only_mask': fragment_only_mask_,
+                                 'pocket_mask': pocket_mask_, 'fragment_mask': fragment_mask_,
+                                 'linker_mask': linker_mask_, 'num_atoms': num_nodes, 'nci': nci})
                     uuid_tr += 1
                 n_sample += 1
-    print(f"Total mols: {n_mol}; Total samples: {n_mol}")
+    print(f"Total mols: {n_mol}; Total samples: {n_sample}")
+    part += 1
     random.shuffle(train)
     random.shuffle(val)
     random.shuffle(test)
-    torch.save(train, os.path.join(output_path, 'crossdock_train.pt'))
-    torch.save(val, os.path.join(output_path, 'crossdock_val.pt'))
-    torch.save(test, os.path.join(output_path, 'crossdock_test.pt'))
+    torch.save(train, os.path.join(output_path, f'crossdock_train{part}.pt'))
+    torch.save(val, os.path.join(output_path, f'crossdock_val{part}.pt'))
+    torch.save(test, os.path.join(output_path, f'crossdock_test{part}.pt'))
     print("Finished!")
 
 
