@@ -15,6 +15,8 @@ template_data = create_templates_for_linker_generation(data, linker_sizes)
 debug:
 重写了src/datasets.py中的create_templates_for_linker_generation函数和create_template函数
 
+src/datasets.py
+line 518-520
 
 ###################################################################################
 ############################# Q2.*** ##############################################
@@ -32,7 +34,6 @@ code: generate_with_pocket.py
 line 114; 209-211; 242; 304
 
 code: src/datasets.py
-line 514-519
 
 code: src/const.py
 line 8; 43; 46
@@ -57,7 +58,8 @@ TODO
 * ========= 描述 ========= *
 用预训练的生成代码提升基于口袋的分子生成的效果。需要思考代码架构并执行。
 * ========= 改动 ========= *
-TODO
+1.利用oddt获取蛋白配体相互作用。code: data/pocket/get_nci.py
+问题：一个原子可以同时充当受体和配体； oddt中没有考虑静电作用
 
 
 ##################################################################################
@@ -68,3 +70,30 @@ TODO
 操作：改动pcqm4m数据集，训练无蛋白口袋的生成模型
 * ========= 改动 ========= *
 TODO
+
+
+##################################################################################
+############################# Q6.** ##############################################
+##################################################################################
+* ========= 描述 ========= *
+验证oddt包和rdkit对分子的编号是一致的
+* ========= code ========= *
+ligand = next(oddt.toolkit.readfile('sdf', mol_path))
+for atom in ligand:
+    #print(f"Atom {atom.Atom.GetSymbol()} has index {atom.Atom.GetIdx()}")
+    print(f"Atom {atom.type} has index {atom.idx}")
+mol = Chem.MolFromMolFile(mol_path)
+for atom in mol.GetAtoms():
+    atom_index = atom.GetIdx()
+    print(f"Atom {atom.GetSymbol()} has index {atom_index}")
+
+
+##################################################################################
+############################# Q7.** ##############################################
+##################################################################################
+* ========= 描述 ========= *
+读取PMDM的crossdock数据中的ligand分子时，发现频繁出现键的连接错误，比如C是5价，N是4价，导致后续数据加工无法执行。
+提交的issue: https://github.com/Layne-Huang/PMDM/issues/28
+
+
+
