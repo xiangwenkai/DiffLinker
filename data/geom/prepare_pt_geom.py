@@ -186,8 +186,13 @@ def find_h_bond_donors_and_acceptors(mol):
     if mol is None:
         return "Invalid SMILES"
 
+    num_valence_electrons = {
+        'H': 1, 'C': 4, 'N': 5, 'O': 6, 'F': 7, 'P': 5, 'S': 6, 'Cl': 7, 'Br': 7, 'I': 7
+    }
+
     donors = []
     acceptors = []
+    donor_acceptors = []
 
     # 遍历分子中的每个原子
     for atom in mol.GetAtoms():
@@ -195,14 +200,25 @@ def find_h_bond_donors_and_acceptors(mol):
         atom_num = atom.GetAtomicNum()
         num_hydrogens = atom.GetTotalNumHs()
 
-        # 判定氢键供体：N or O 并且至少有一个隐含氢
-        if atom_num in [7, 8] and num_hydrogens > 0:
-            donors.append(atom_idx)
-        # 判定氢键受体：N, O, or F 并且没有隐含氢或仅部分隐含氢（排除氢键供体）
-        elif atom_num in [7, 8, 9] and (atom_num != 7 or num_hydrogens == 0):  # N, O, 或 F并且无隐含氢
-            acceptors.append(atom_idx)
+        # 计算孤对电子数量
+        # 实际参与的共价键数（键序和）
+        total_bonds = sum([b.GetBondTypeAsDouble() for b in atom.GetBonds()])
+        # 原子的形式电荷
+        formal_charge = atom.GetFormalCharge()
+        # 计算孤对电子数
+        lone_pairs = (num_valence_electrons[atom.GetSymbol()] - total_bonds - formal_charge) / 2
 
-    return donors, acceptors
+        # 判定氢键供体：N or O 并且至少有一个隐含氢
+        if atom_num in [7, 8] and num_hydrogens > 0 and lone_pairs > 0:
+            donor_acceptors.append(atom_idx)
+        elif atom_num in [7, 8] and num_hydrogens > 0:
+            donors.append(atom_idx)
+        elif lone_pairs > 0:
+            acceptors.append(atom_idx)
+        # 判定氢键受体：N, O, or F 并且没有隐含氢或仅部分隐含氢（排除氢键供体）
+        # elif atom_num in [7, 8, 9] and (atom_num != 7 or num_hydrogens == 0):  # N, O, 或 F并且无隐含氢
+        #     acceptors.append(atom_idx)
+    return donors, acceptors, donor_acceptors
 
 
 # 函数：识别疏水基团
@@ -214,7 +230,7 @@ def find_hydrophobic_groups(mol):
     return hydrophobic_groups
 
 
-# 函数：识别芳香基团
+# 函数：识别芳香基团. pi-pi; 疏水
 def find_aromatic_groups(mol):
     aromatic_groups = []
     for atom in mol.GetAtoms():
@@ -223,7 +239,7 @@ def find_aromatic_groups(mol):
     return aromatic_groups
 
 
-# 函数：识别静电相互作用
+# 函数：识别静电相互作用；盐桥
 def find_electrostatic_interactions(mol):
     positive_sites = []
     negative_sites = []
@@ -244,6 +260,12 @@ def find_coordination_sites(mol):
         if atom.GetAtomicNum() in [7, 8, 16]:  # N, O, S
             coordination_sites.append(atom.GetIdx())
     return coordination_sites
+
+
+# 识别卤素。卤键
+def find_halogens(mol):
+    return [atom.GetIdx() for atom in mol.GetAtoms() if atom.GetSymbol() in ['Cl', 'Br', 'I']]
+
 
 
 def get_break_bonds(molecule, atom_indices):
@@ -321,6 +343,7 @@ def run(base_path="E:/DATA/dgl_graphormer/geom_drugs", output_path='E:/DATA/dgl_
     uuid_val = 0
     uuid_te = 0
     t0 = time.time()
+    n_mol = 0
     for i in tqdm(range(n)):
         if i % 1000 == 0:
             print(f"n :{i}, time: {time.time() - t0}")
@@ -373,19 +396,17 @@ def run(base_path="E:/DATA/dgl_graphormer/geom_drugs", output_path='E:/DATA/dgl_
             continue
         # ======================== anchors ============================= #
         # 识别不同类型的相互作用位点
-        h_bond_donors, h_bond_acceptors = find_h_bond_donors_and_acceptors(mol)
+        h_bond_donors, h_bond_acceptors, donor_acceptors = find_h_bond_donors_and_acceptors(mol)
         hydrophobic_groups = find_hydrophobic_groups(mol)
-        # aromatic_groups = find_aromatic_groups(mol)
+        aromatic_groups = find_aromatic_groups(mol)
         positive_sites, negative_sites = find_electrostatic_interactions(mol)
-        coordination_sites = find_coordination_sites(mol)
+        halogens = find_halogens(mol)
+        # coordination_sites = find_coordination_sites(mol)
 
         # 作用力类型
         types_map = {}
         for idx in h_bond_donors:
             types_map[idx] = 1
-        for idx in h_bond_acceptors:
-            if idx not in types_map:
-                types_map[idx] = 2
         for idx in h_bond_acceptors:
             if idx not in types_map:
                 types_map[idx] = 2
@@ -408,48 +429,71 @@ def run(base_path="E:/DATA/dgl_graphormer/geom_drugs", output_path='E:/DATA/dgl_
         if len(candidate_atoms) < 2:
             continue
 
+        n_mol += 1
+
         # 采样需要分离的原子索引
         atom_indexes = []
-        for k in range(3, min(11, len(candidate_atoms) + 1, num_nodes)):
+        for k in range(1, min(len(sample_numbers)+1, len(candidate_atoms) + 1, num_nodes)):
             for t in range(sample_numbers[k]):
                 atom_index = list(set(random.sample(candidate_atoms, k)))
                 if atom_index not in atom_indexes:
                     atom_indexes.append(atom_index)
 
         for atom_index in atom_indexes:
+            link_index = list(set([x for x in range(num_nodes)]) - set(atom_index))
             # nci
-            nci = torch.tensor([types_map[x] for x in atom_index])
+            nci = torch.zeros_like(charges)
+            nci[:len(atom_index)] = torch.tensor([types_map[x] for x in atom_index])
 
             atom_index = torch.tensor(atom_index)
             anchors = torch.zeros(num_nodes)
             anchors[atom_index] = 1.
             if torch.isnan(anchors).any():
                 continue
+
+            # frag charges; frag one_hot; frag pos
+            frag_charges = charges[atom_index]
+            frag_one_hot = one_hot[atom_index]
+            frag_pos = positions[atom_index]
+
+            # link charges; link one_hot; link pos
+            link_charges = charges[link_index]
+            link_one_hot = one_hot[link_index]
+            link_pos = positions[link_index]
+
+            positions_ = torch.cat([frag_pos, link_pos])
+            one_hot_ = torch.cat([frag_one_hot, link_one_hot])
+            charges_ = torch.cat([frag_charges, link_charges])
+
             # ======================== fragment_mask ========================
-            fragment_mask = anchors.clone()
+            fragment_mask_ = torch.cat([torch.ones_like(frag_charges), torch.zeros_like(link_charges)])
             # ======================== linker_mask ========================
-            linker_mask = 1. - fragment_mask
+            linker_mask_ = torch.cat([torch.zeros_like(frag_charges), torch.ones_like(link_charges)])
+
             if rand < 0.0005:
-                test.append({'uuid': uuid_te, 'name': name, 'positions': positions, 'one_hot': one_hot,
-                             'charges': charges, 'anchors': anchors, 'fragment_mask': fragment_mask,
-                             'linker_mask': linker_mask, 'num_atoms': num_nodes, 'nci': nci})
+                test.append({'uuid': uuid_te, 'name': name, 'positions': positions_, 'one_hot': one_hot_,
+                             'charges': charges_, 'anchors': anchors, 'fragment_mask': fragment_mask_,
+                             'linker_mask': linker_mask_, 'num_atoms': num_nodes, 'nci': nci})
                 uuid_te += 1
             elif rand < 0.001:
-                val.append({'uuid': uuid_val, 'name': name, 'positions': positions, 'one_hot': one_hot,
-                            'charges': charges, 'anchors': anchors, 'fragment_mask': fragment_mask,
-                            'linker_mask': linker_mask, 'num_atoms': num_nodes, 'nci': nci})
+                val.append({'uuid': uuid_val, 'name': name, 'positions': positions_, 'one_hot': one_hot_,
+                            'charges': charges_, 'anchors': anchors, 'fragment_mask': fragment_mask_,
+                            'linker_mask': linker_mask_, 'num_atoms': num_nodes, 'nci': nci})
                 uuid_val += 1
             else:
-                train.append({'uuid': uuid_tr, 'name': name, 'positions': positions, 'one_hot': one_hot,
-                              'charges': charges, 'anchors': anchors, 'fragment_mask': fragment_mask,
-                              'linker_mask': linker_mask, 'num_atoms': num_nodes, 'nci': nci})
+                train.append({'uuid': uuid_tr, 'name': name, 'positions': positions_, 'one_hot': one_hot_,
+                              'charges': charges_, 'anchors': anchors, 'fragment_mask': fragment_mask_,
+                              'linker_mask': linker_mask_, 'num_atoms': num_nodes, 'nci': nci})
                 uuid_tr += 1
+
+    print(f"Total mols: {n_mol}")
     random.shuffle(train)
     random.shuffle(val)
     random.shuffle(test)
     torch.save(train, os.path.join(output_path, 'geom_multifrag_train.pt'))
     torch.save(val, os.path.join(output_path, 'geom_multifrag_val.pt'))
     torch.save(test, os.path.join(output_path, 'geom_multifrag_test.pt'))
+    print("Finished!")
 
 
 if __name__ == '__main__':

@@ -45,6 +45,10 @@ parser.add_argument(
     help='Comma-separated indices of anchor atoms '
          '(according to the order of atoms in the input fragments file, enumeration starts with 1)'
 )
+parser.add_argument(
+    '--nci', action='store', type=str, required=False, default=None,
+    help='nci type'
+)
 
 
 def read_molecule(path):
