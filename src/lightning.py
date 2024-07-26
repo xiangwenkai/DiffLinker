@@ -133,13 +133,13 @@ class DDPM(pl.LightningModule):
         else:
             raise NotImplementedError
 
-    def train_dataloader(self, collate_fn=collate_pre):
+    def train_dataloader(self, collate_fn=collate):
         return get_dataloader(self.train_dataset, self.batch_size, collate_fn=collate_fn, shuffle=True)
 
-    def val_dataloader(self, collate_fn=collate_pre):
+    def val_dataloader(self, collate_fn=collate):
         return get_dataloader(self.val_dataset, self.batch_size, collate_fn=collate_fn)
 
-    def test_dataloader(self, collate_fn=collate_pre):
+    def test_dataloader(self, collate_fn=collate):
         return get_dataloader(self.test_dataset, self.batch_size, collate_fn=collate_fn)
 
     def pre_process(self, batch):
@@ -229,7 +229,7 @@ class DDPM(pl.LightningModule):
 
 
     def forward(self, data, training):
-        data = self.pre_process(data)
+        # data = self.pre_process(data)
         x = data['positions']
         h = data['one_hot']
         node_mask = data['atom_mask']
@@ -419,7 +419,7 @@ class DDPM(pl.LightningModule):
         true_fragments = []
 
         for b, data in tqdm(enumerate(dataloader), total=len(dataloader), desc='Sampling'):
-            data = self.pre_process(data)
+            # data = self.pre_process(data)
             atom_mask = data['atom_mask']
             fragment_mask = data['fragment_mask']
 
@@ -691,13 +691,13 @@ class Pre_DDPM(pl.LightningModule):
         else:
             raise NotImplementedError
 
-    def train_dataloader(self, collate_fn=collate_pre):
+    def train_dataloader(self, collate_fn=collate):
         return get_dataloader(self.train_dataset, self.batch_size, collate_fn=collate_fn, shuffle=True)
 
-    def val_dataloader(self, collate_fn=collate_pre):
+    def val_dataloader(self, collate_fn=collate):
         return get_dataloader(self.val_dataset, self.batch_size, collate_fn=collate_fn)
 
-    def test_dataloader(self, collate_fn=collate_pre):
+    def test_dataloader(self, collate_fn=collate):
         return get_dataloader(self.test_dataset, self.batch_size, collate_fn=collate_fn)
 
     def pre_process(self, batch):
@@ -840,7 +840,7 @@ class Pre_DDPM(pl.LightningModule):
 
 
     def forward(self, data, training):
-        data = self.pre_process(data)
+        # data = self.pre_process(data)
         x = data['positions']
         h = data['one_hot']
         node_mask = data['atom_mask']
@@ -1049,7 +1049,7 @@ class Pre_DDPM(pl.LightningModule):
         true_fragments = []
 
         for b, data in tqdm(enumerate(dataloader), total=len(dataloader), desc='Sampling'):
-            data = self.pre_process(data)
+            # data = self.pre_process(data)
             atom_mask = data['atom_mask']
             fragment_mask = data['fragment_mask']
 
