@@ -377,6 +377,77 @@ def collate(batch):
     return out
 
 
+def collate_pre(batch):
+    '''
+    out = {}
+
+    # Filter out big molecules
+    # if 'pocket_mask' not in batch[0].keys():
+    #    batch = [data for data in batch if data['num_atoms'] <= 50]
+    # else:
+    #    batch = [data for data in batch if data['num_atoms'] <= 1000]
+
+    for x in batch:
+        # x_ = {'uuid': x['uuid'], 'name': x['name'], 'num_atoms': x['num_atoms']}
+        # x_ = {}
+        n_frag = sum(x['fragment_only_mask'])
+        n_poc = sum(x['pocket_mask'])
+        x['positions_pre'] = torch.cat([x['positions'][:n_frag], x['positions'][n_frag+n_poc:]])
+        x['one_hot_pre'] = torch.cat([x['one_hot'][:n_frag], x['one_hot'][n_frag + n_poc:]])
+        x['charges_pre'] = torch.cat([x['charges'][:n_frag], x['charges'][n_frag + n_poc:]])
+        x['anchors_pre'] = x['anchors'][:x['num_atoms']]
+        x['fragment_mask_pre'] = torch.cat([x['fragment_mask'][:n_frag], x['fragment_mask'][n_frag + n_poc:]])
+        x['linker_mask_pre'] = torch.cat([x['linker_mask'][:n_frag], x['linker_mask'][n_frag + n_poc:]])
+        x['nci_pre'] = torch.cat([x['nci'][:n_frag], x['nci'][n_frag + n_poc:]])
+
+    for i, data in enumerate(batch):
+        for key, value in data.items():
+            out.setdefault(key, []).append(value)
+
+    for key, value in out.items():
+        if key in const.DATA_LIST_ATTRS:
+            continue
+        if key in const.DATA_ATTRS_TO_PAD:
+            out[key] = torch.nn.utils.rnn.pad_sequence(value, batch_first=True, padding_value=0)
+            continue
+        raise Exception(f'Unknown batch key: {key}')
+
+    atom_mask = (out['fragment_mask'].bool() | out['linker_mask'].bool()).to(const.TORCH_INT)
+    out['atom_mask'] = atom_mask[:, :, None]
+
+    atom_mask_pre = (out['fragment_mask_pre'].bool() | out['linker_mask_pre'].bool()).to(const.TORCH_INT)
+    out['atom_mask_pre'] = atom_mask_pre[:, :, None]
+
+    batch_size, n_nodes = atom_mask.size()
+    _, n_nodes_pre = atom_mask_pre.size()
+
+    # In case of MOAD edge_mask is batch_idx
+    if 'pocket_mask' in batch[0].keys():
+        batch_mask = torch.cat([
+            torch.ones(n_nodes, dtype=const.TORCH_INT) * i
+            for i in range(batch_size)
+        ]).to(atom_mask.device)
+        out['edge_mask'] = batch_mask
+
+        edge_mask_pre = atom_mask_pre[:, None, :] * atom_mask_pre[:, :, None]
+        diag_mask_pre = ~torch.eye(edge_mask_pre.size(1), dtype=const.TORCH_INT, device=atom_mask_pre.device).unsqueeze(0)
+        edge_mask_pre *= diag_mask_pre
+        out['edge_mask_pre'] = edge_mask_pre.view(batch_size * n_nodes_pre * n_nodes_pre, 1)
+    else:
+        edge_mask = atom_mask[:, None, :] * atom_mask[:, :, None]
+        diag_mask = ~torch.eye(edge_mask.size(1), dtype=const.TORCH_INT, device=atom_mask.device).unsqueeze(0)
+        edge_mask *= diag_mask
+        out['edge_mask'] = edge_mask.view(batch_size * n_nodes * n_nodes, 1)
+
+    for key in const.DATA_ATTRS_TO_ADD_LAST_DIM:
+        if key in out.keys():
+            out[key] = out[key][:, :, None]
+
+    return out
+    '''
+    return batch
+
+
 def collate_with_fragment_edges(batch):
     out = {}
 
@@ -515,7 +586,7 @@ def create_templates_for_linker_generation(data, linker_sizes):
                 fill_value = 1 if k == 'linker_mask' else 0
                 template = create_template(v[i], fragment_size, linker_size, fill=fill_value)
                 if k in const.DATA_ATTRS_TO_ADD_LAST_DIM:
-                    if k == 'anchors':
+                    if k in ['anchors', 'anchors_pre']:
                         k_keep = min(template.shape[0], v[i].shape[0])
                         template[:k_keep] = v[i][:k_keep]
                     template = template.squeeze(-1)
