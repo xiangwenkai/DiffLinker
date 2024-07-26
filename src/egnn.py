@@ -552,7 +552,7 @@ class DynamicsWithPockets(Dynamics):
 
 class Pre_Dynamics(nn.Module):
     def __init__(
-            self, n_dims, in_node_nf, context_node_nf, pre_dynamics_path='models/teste17.ckpt',
+            self, n_dims, in_node_nf, context_node_nf,
             hidden_nf=64, device='cpu', activation=nn.SiLU(),
             n_layers=4, attention=False, condition_time=True, tanh=False, norm_constant=0, inv_sublayers=2,
             sin_embedding=False, normalization_factor=100, aggregation_method='sum', model='egnn_dynamics',
