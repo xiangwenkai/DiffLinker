@@ -307,16 +307,16 @@ def get_interactions(pdb_file, sdf_file):
     '''
         return res_id, res_atom_name, ligand_atom_id
     '''
-    nci_maps = {'halogenbonds': 4, 'pi_stacking': 5,
-                'pi_cation': 6, 'hydrophobic_contacts': 7, 'salt_bridges': 8}
+    nci_maps = {'halogenbonds': 4, 'salt_bridges': 5, 'hydrophobic_contacts': 6, 'pi_stacking': 7,
+                'pi_cation': 8}
 
     interactions = {
         'hbond_acceptor_donor': partial(hbond_acceptor_donor, cutoff=3.5, tolerance=30),
         'halogenbonds': partial(halogenbonds, cutoff=4.2, tolerance=30),
-        'pi_stacking': partial(pi_stacking, cutoff=5.5, tolerance=90),
+        # 'pi_stacking': partial(pi_stacking, cutoff=5.5, tolerance=90),
         'salt_bridges': partial(salt_bridges, cutoff=5.0),
         'hydrophobic_contacts': hydrophobic_contacts,
-        'pi_cation': partial(pi_cation, cutoff=6.6, tolerance=60),
+        # 'pi_cation': partial(pi_cation, cutoff=6.6, tolerance=60),
     }
 
     result = {}
@@ -422,11 +422,11 @@ def get_interactions(pdb_file, sdf_file):
     for k, v in result.items():
         if k == 'hbond_acceptor_donor':
             for x in v:
-                if x['res_atom_isacceptor'] == True and x['res_atom_isdonor'] == True:
+                if x['res_atom_isacceptor'] == False and x['res_atom_isdonor'] == True:
                     nci_type.append(1)
                 elif x['res_atom_isacceptor'] == True and x['res_atom_isdonor'] == False:
                     nci_type.append(2)
-                elif x['res_atom_isacceptor'] == False and x['res_atom_isdonor'] == True:
+                elif x['res_atom_isacceptor'] == True and x['res_atom_isdonor'] == True:
                     nci_type.append(3)
                 protein_atom_type.append(x['res_atom_type'])
                 protein_atom_id.append(x['res_atom_id'])
@@ -533,7 +533,7 @@ def run():
             nci_prob[-1] = 1. - sum(nci_prob[:-1])
             atom_indexes = []
             nci_types = []
-            for k in range(1, min(7, candidate_nci + 1, num_nodes)):
+            for k in range(1, min(len(sample_numbers) + 1, candidate_nci + 1, num_nodes)):
                 atom_index, nci_type = sample_nci(n_nci=candidate_nci, nci_prob=nci_prob,
                                                   lig_atom_id=nci_info['lig_atom_id'],
                                                   nci_type=nci_info['nci_type'], k_sample=k, t=sample_numbers[k])
