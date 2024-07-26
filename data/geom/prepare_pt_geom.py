@@ -241,16 +241,19 @@ def find_aromatic_groups(mol):
 
 # 函数：识别静电相互作用；盐桥
 def find_electrostatic_interactions(mol):
-    positive_sites = []
-    negative_sites = []
-
+    # positive_sites = []
+    # negative_sites = []
+    # for atom in mol.GetAtoms():
+    #     if atom.GetFormalCharge() > 0:
+    #         positive_sites.append(atom.GetIdx())
+    #     elif atom.GetFormalCharge() < 0:
+    #         negative_sites.append(atom.GetIdx())
+    # return positive_sites, negative_sites
+    salt_bridges = []
     for atom in mol.GetAtoms():
-        if atom.GetFormalCharge() > 0:
-            positive_sites.append(atom.GetIdx())
-        elif atom.GetFormalCharge() < 0:
-            negative_sites.append(atom.GetIdx())
-
-    return positive_sites, negative_sites
+        if atom.GetFormalCharge() != 0:
+            salt_bridges.append(atom.GetIdx())
+    return salt_bridges
 
 
 # 函数：识别潜在配位键部位
@@ -286,19 +289,20 @@ def get_break_bonds(molecule, atom_indices):
 
 
 # sort bind site atom
-def sort_bind_atom(mol, h_bond_donors, h_bond_acceptors, hydrophobic_groups, positive_sites, negative_sites, coordination_sites):
-    all_idx = list(set(h_bond_donors + h_bond_acceptors + hydrophobic_groups + positive_sites +
-                       negative_sites + coordination_sites))
+def sort_bind_atom(mol, h_bond_donors, h_bond_acceptors, donor_acceptors,
+                                         halogens, salt_bridges, hydrophobic_groups):
+    all_idx = list(set(h_bond_donors + h_bond_acceptors + donor_acceptors + halogens +
+                       salt_bridges + hydrophobic_groups))
     score = {i: 0 for i in all_idx}
     # 不同作用的得分不同
     for idx in all_idx:
-        if idx in h_bond_donors or idx in h_bond_acceptors:
+        if idx in h_bond_donors or idx in h_bond_acceptors or idx in donor_acceptors:
             score[idx] += 5
-        if idx in hydrophobic_groups:
+        if idx in halogens:
             score[idx] += 3
-        if idx in positive_sites or idx in negative_sites:
+        if idx in salt_bridges:
             score[idx] += 2
-        if idx in coordination_sites:
+        if idx in hydrophobic_groups:
             score[idx] += 1
     # 根据原子的连边数量，赋予得分。一般在外围的原子连边少，得分高
     # 获取该原子连接的原子数目
@@ -324,7 +328,7 @@ def sort_bind_atom(mol, h_bond_donors, h_bond_acceptors, hydrophobic_groups, pos
 
 def run(base_path="E:/DATA/dgl_graphormer/geom_drugs", output_path='E:/DATA/dgl_graphormer/geom_drugs/processed'):
     drugs_file = os.path.join(base_path, "rdkit_folder/summary_drugs.json")
-    sample_numbers = {1: 1, 2: 1, 3: 5, 4: 5, 5: 3, 6: 1, 7: 1, 8: 1, 9: 1, 10: 1}
+    sample_numbers = {1: 1, 2: 1, 3: 2, 4: 3, 5: 5, 6: 2, 7: 1, 8: 1}
     atom_types = {'C': 0, 'O': 1, 'N': 2, 'F': 3, 'S': 4, 'Cl': 5, 'Br': 6, 'I': 7, 'P': 8}
     n_types = 9
     with open(drugs_file, "r") as f:
@@ -363,7 +367,7 @@ def run(base_path="E:/DATA/dgl_graphormer/geom_drugs", output_path='E:/DATA/dgl_
         mol = Chem.RemoveHs(mol)
         # ======================== num_atoms ========================
         num_nodes = mol.GetNumAtoms()
-        if num_nodes > 40 or num_nodes < 5:
+        if num_nodes > 40 or num_nodes < 7:
             continue
 
         # ======================== name ========================
@@ -398,8 +402,8 @@ def run(base_path="E:/DATA/dgl_graphormer/geom_drugs", output_path='E:/DATA/dgl_
         # 识别不同类型的相互作用位点
         h_bond_donors, h_bond_acceptors, donor_acceptors = find_h_bond_donors_and_acceptors(mol)
         hydrophobic_groups = find_hydrophobic_groups(mol)
-        aromatic_groups = find_aromatic_groups(mol)
-        positive_sites, negative_sites = find_electrostatic_interactions(mol)
+        # aromatic_groups = find_aromatic_groups(mol)
+        salt_bridges = find_electrostatic_interactions(mol)
         halogens = find_halogens(mol)
         # coordination_sites = find_coordination_sites(mol)
 
@@ -410,35 +414,48 @@ def run(base_path="E:/DATA/dgl_graphormer/geom_drugs", output_path='E:/DATA/dgl_
         for idx in h_bond_acceptors:
             if idx not in types_map:
                 types_map[idx] = 2
-        for idx in hydrophobic_groups:
+        for idx in donor_acceptors:
             if idx not in types_map:
                 types_map[idx] = 3
-        for idx in positive_sites:
+        for idx in halogens:
             if idx not in types_map:
                 types_map[idx] = 4
-        for idx in negative_sites:
+        for idx in salt_bridges:
             if idx not in types_map:
                 types_map[idx] = 5
-        for idx in coordination_sites:
+        for idx in hydrophobic_groups:
             if idx not in types_map:
                 types_map[idx] = 6
 
         # 候选结合原子
-        candidate_atoms = sort_bind_atom(mol, h_bond_donors, h_bond_acceptors, hydrophobic_groups, positive_sites,
-                                         negative_sites, coordination_sites)
-        if len(candidate_atoms) < 2:
+        candidate_atoms = sort_bind_atom(mol, h_bond_donors, h_bond_acceptors, donor_acceptors,
+                                         halogens, salt_bridges, hydrophobic_groups)
+        if len(candidate_atoms) < 1:
             continue
 
         n_mol += 1
 
         # 采样需要分离的原子索引
         atom_indexes = []
-        for k in range(1, min(len(sample_numbers)+1, len(candidate_atoms) + 1, num_nodes)):
+        for k in range(3, min(len(sample_numbers)+1, len(candidate_atoms) + 1, num_nodes)):
             for t in range(sample_numbers[k]):
                 atom_index = list(set(random.sample(candidate_atoms, k)))
                 if atom_index not in atom_indexes:
                     atom_indexes.append(atom_index)
 
+        if rand < 0.0005:
+            test.append({'uuid': uuid_te, 'name': name, 'positions': positions, 'one_hot': one_hot,
+                         'charges': charges, 'atom_indexes': atom_indexes, 'num_atoms': num_nodes})
+            uuid_te += 1
+        elif rand < 0.001:
+            val.append({'uuid': uuid_te, 'name': name, 'positions': positions, 'one_hot': one_hot,
+                         'charges': charges, 'atom_indexes': atom_indexes, 'num_atoms': num_nodes})
+            uuid_val += 1
+        else:
+            train.append({'uuid': uuid_te, 'name': name, 'positions': positions, 'one_hot': one_hot,
+                         'charges': charges, 'atom_indexes': atom_indexes, 'num_atoms': num_nodes})
+            uuid_tr += 1
+        '''
         for atom_index in atom_indexes:
             link_index = list(set([x for x in range(num_nodes)]) - set(atom_index))
             # nci
@@ -485,7 +502,7 @@ def run(base_path="E:/DATA/dgl_graphormer/geom_drugs", output_path='E:/DATA/dgl_
                               'charges': charges_, 'anchors': anchors, 'fragment_mask': fragment_mask_,
                               'linker_mask': linker_mask_, 'num_atoms': num_nodes, 'nci': nci})
                 uuid_tr += 1
-
+            '''
     print(f"Total mols: {n_mol}")
     random.shuffle(train)
     random.shuffle(val)
