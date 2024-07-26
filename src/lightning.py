@@ -1,3 +1,4 @@
+import copy
 import random
 import numpy as np
 import os
@@ -144,8 +145,9 @@ class DDPM(pl.LightningModule):
     def pre_process(self, batch):
         keys_to_remove = ['atom_indexes']
         if type(batch) == list:
-            if 'atom_indexes' in batch[0]:
-                for x in batch:
+            batch_copy = copy.deepcopy(batch)
+            if 'atom_indexes' in batch_copy[0]:
+                for x in batch_copy:
                     k = len(x['atom_indexes'])
                     k_sample = random.randint(0, k-1)
                     atom_index = x['atom_indexes'][k_sample]
@@ -188,7 +190,7 @@ class DDPM(pl.LightningModule):
                     for key in keys_to_remove:
                         del x[key]
             out = {}
-            for i, data in enumerate(batch):
+            for i, data in enumerate(batch_copy):
                 for key, value in data.items():
                     out.setdefault(key, []).append(value)
 
@@ -206,7 +208,7 @@ class DDPM(pl.LightningModule):
             batch_size, n_nodes = atom_mask.size()
 
             # In case of MOAD edge_mask is batch_idx
-            if 'pocket_mask' in batch[0].keys():
+            if 'pocket_mask' in batch_copy[0].keys():
                 batch_mask = torch.cat([
                     torch.ones(n_nodes, dtype=const.TORCH_INT) * i
                     for i in range(batch_size)
@@ -702,8 +704,9 @@ class Pre_DDPM(pl.LightningModule):
         keys_to_remove = ['pocket_pos', 'pocket_one_hot', 'pocket_charges', 'atom_indexes',
                           'nci_types', 'mol_pos', 'mol_one_hot', 'mol_charges']
         if type(batch) == list:
-            if 'atom_indexes' in batch[0]:
-                for x in batch:
+            batch_copy = copy.deepcopy(batch)
+            if 'atom_indexes' in batch_copy[0]:
+                for x in batch_copy:
                     k = len(x['atom_indexes'])
                     k_sample = random.randint(0, k-1)
                     atom_index = x['atom_indexes'][k_sample]
@@ -769,8 +772,8 @@ class Pre_DDPM(pl.LightningModule):
 
                     for key in keys_to_remove:
                         del x[key]
-            elif 'positions_pre' not in batch[0]:
-                for x in batch:
+            elif 'positions_pre' not in batch_copy[0]:
+                for x in batch_copy:
                     n_atoms = x['num_atoms']
                     n_frag = int(sum(x['fragment_only_mask']).item())
                     n_poc = int(sum(x['pocket_mask']).item())
@@ -788,7 +791,7 @@ class Pre_DDPM(pl.LightningModule):
                     x['linker_mask_pre'] = torch.cat([torch.zeros_like(frag_charges), torch.ones_like(link_charges)])
                     x['mol_index'] = [n_frag, n_frag + n_poc, n_atoms]
             out = {}
-            for i, data in enumerate(batch):
+            for i, data in enumerate(batch_copy):
                 for key, value in data.items():
                     out.setdefault(key, []).append(value)
 
@@ -810,7 +813,7 @@ class Pre_DDPM(pl.LightningModule):
             _, n_nodes_pre = atom_mask_pre.size()
 
             # In case of MOAD edge_mask is batch_idx
-            if 'pocket_mask' in batch[0].keys():
+            if 'pocket_mask' in batch_copy[0].keys():
                 batch_mask = torch.cat([
                     torch.ones(n_nodes, dtype=const.TORCH_INT) * i
                     for i in range(batch_size)

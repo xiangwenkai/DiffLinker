@@ -586,9 +586,9 @@ def create_templates_for_linker_generation(data, linker_sizes):
                 fill_value = 1 if k == 'linker_mask' else 0
                 template = create_template(v[i], fragment_size, linker_size, fill=fill_value)
                 if k in const.DATA_ATTRS_TO_ADD_LAST_DIM:
-                    if k in ['anchors', 'anchors_pre']:
-                        k_keep = min(template.shape[0], v[i].shape[0])
-                        template[:k_keep] = v[i][:k_keep]
+                    # if k in ['anchors', 'anchors_pre']:
+                    #     k_keep = min(template.shape[0], v[i].shape[0])
+                    #     template[:k_keep] = v[i][:k_keep]
                     template = template.squeeze(-1)
                 data_dict[k] = template
 
