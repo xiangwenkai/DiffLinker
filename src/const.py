@@ -37,13 +37,17 @@ GEOM_NUMBER_OF_ATOM_TYPES = len(GEOM_ATOM2IDX)
 
 # Dataset keys
 DATA_LIST_ATTRS = {
-    'uuid', 'name', 'fragments_smi', 'linker_smi', 'num_atoms'
+    'uuid', 'name', 'fragments_smi', 'linker_smi', 'num_atoms', 'mol_index'
 }
 DATA_ATTRS_TO_PAD = {
-    'positions', 'one_hot', 'charges', 'anchors', 'fragment_mask', 'linker_mask', 'pocket_mask', 'fragment_only_mask', 'nci'
+    'positions', 'one_hot', 'charges', 'anchors', 'fragment_mask', 'linker_mask', 'pocket_mask', 'fragment_only_mask', 'nci',
+    'positions_pre', 'one_hot_pre', 'charges_pre', 'anchors_pre', 'fragment_mask_pre', 'linker_mask_pre',
+    'pocket_mask_pre', 'fragment_only_mask_pre', 'nci_pre'
 }
 DATA_ATTRS_TO_ADD_LAST_DIM = {
-    'charges', 'anchors', 'fragment_mask', 'linker_mask', 'pocket_mask', 'fragment_only_mask', 'nci'
+    'charges', 'anchors', 'fragment_mask', 'linker_mask', 'pocket_mask', 'fragment_only_mask', 'nci',
+    'charges_pre', 'anchors_pre', 'fragment_mask_pre', 'linker_mask_pre', 'pocket_mask_pre',
+    'fragment_only_mask_pre', 'nci_pre'
 }
 
 # Distribution of linker size in train data
