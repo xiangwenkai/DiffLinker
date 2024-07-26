@@ -51,7 +51,7 @@ def main(args):
     in_node_nf = number_of_atoms + args.include_charges
     anchors_context = not args.remove_anchors_context
     context_node_nf = 2 if anchors_context else 1
-    context_node_nf += 1  # nci
+    # context_node_nf += 1  # nci
     if '.' in args.train_data_prefix:
         context_node_nf += 1
 
