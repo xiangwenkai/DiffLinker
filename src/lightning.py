@@ -133,13 +133,13 @@ class DDPM(pl.LightningModule):
         else:
             raise NotImplementedError
 
-    def train_dataloader(self, collate_fn=collate):
+    def train_dataloader(self, collate_fn=collate_pre):
         return get_dataloader(self.train_dataset, self.batch_size, collate_fn=collate_fn, shuffle=True)
 
-    def val_dataloader(self, collate_fn=collate):
+    def val_dataloader(self, collate_fn=collate_pre):
         return get_dataloader(self.val_dataset, self.batch_size, collate_fn=collate_fn)
 
-    def test_dataloader(self, collate_fn=collate):
+    def test_dataloader(self, collate_fn=collate_pre):
         return get_dataloader(self.test_dataset, self.batch_size, collate_fn=collate_fn)
 
     def pre_process(self, batch):
@@ -168,10 +168,6 @@ class DDPM(pl.LightningModule):
                     x['one_hot'] = torch.cat([frag_one_hot, link_one_hot])
                     x['charges'] = torch.cat([frag_charges, link_charges])
 
-                    anchors = torch.zeros_like(x['charges'])
-                    anchors[atom_index] = 1.
-                    x['anchors'] = anchors
-
                     # nci
                     # nci = torch.zeros_like(x['charges'])
                     # nci[:len(atom_index)] = torch.tensor(nci_type)
@@ -181,6 +177,9 @@ class DDPM(pl.LightningModule):
                         torch.ones_like(frag_charges),
                         torch.zeros_like(link_charges)
                     ])
+
+                    x['anchors'] = x['fragment_mask'][:]
+
                     # ======================== linker_mask ========================
                     x['linker_mask'] = torch.cat([
                         torch.zeros_like(frag_charges),
@@ -229,7 +228,7 @@ class DDPM(pl.LightningModule):
 
 
     def forward(self, data, training):
-        # data = self.pre_process(data)
+        data = self.pre_process(data)
         x = data['positions']
         h = data['one_hot']
         node_mask = data['atom_mask']
@@ -419,7 +418,7 @@ class DDPM(pl.LightningModule):
         true_fragments = []
 
         for b, data in tqdm(enumerate(dataloader), total=len(dataloader), desc='Sampling'):
-            # data = self.pre_process(data)
+            data = self.pre_process(data)
             atom_mask = data['atom_mask']
             fragment_mask = data['fragment_mask']
 
@@ -691,13 +690,13 @@ class Pre_DDPM(pl.LightningModule):
         else:
             raise NotImplementedError
 
-    def train_dataloader(self, collate_fn=collate):
+    def train_dataloader(self, collate_fn=collate_pre):
         return get_dataloader(self.train_dataset, self.batch_size, collate_fn=collate_fn, shuffle=True)
 
-    def val_dataloader(self, collate_fn=collate):
+    def val_dataloader(self, collate_fn=collate_pre):
         return get_dataloader(self.val_dataset, self.batch_size, collate_fn=collate_fn)
 
-    def test_dataloader(self, collate_fn=collate):
+    def test_dataloader(self, collate_fn=collate_pre):
         return get_dataloader(self.test_dataset, self.batch_size, collate_fn=collate_fn)
 
     def pre_process(self, batch):
@@ -727,9 +726,6 @@ class Pre_DDPM(pl.LightningModule):
                     x['one_hot'] = torch.cat([frag_one_hot, x['pocket_one_hot'], link_one_hot])
                     x['charges'] = torch.cat([frag_charges, x['pocket_charges'], link_charges])
 
-                    anchors = torch.zeros_like(x['charges'])
-                    anchors[atom_index] = 1.
-                    x['anchors'] = anchors
 
                     # nci
                     # nci = torch.zeros_like(x['charges'])
@@ -741,6 +737,9 @@ class Pre_DDPM(pl.LightningModule):
                         torch.zeros_like(x['pocket_charges']),
                         torch.zeros_like(link_charges)
                     ])
+
+                    x['anchors'] = x['fragment_only_mask'][:]
+
                     x['pocket_mask'] = torch.cat([
                         torch.zeros_like(frag_charges),
                         torch.ones_like(x['pocket_charges']),
@@ -840,7 +839,7 @@ class Pre_DDPM(pl.LightningModule):
 
 
     def forward(self, data, training):
-        # data = self.pre_process(data)
+        data = self.pre_process(data)
         x = data['positions']
         h = data['one_hot']
         node_mask = data['atom_mask']
@@ -1049,7 +1048,7 @@ class Pre_DDPM(pl.LightningModule):
         true_fragments = []
 
         for b, data in tqdm(enumerate(dataloader), total=len(dataloader), desc='Sampling'):
-            # data = self.pre_process(data)
+            data = self.pre_process(data)
             atom_mask = data['atom_mask']
             fragment_mask = data['fragment_mask']
 
