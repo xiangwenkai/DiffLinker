@@ -628,6 +628,8 @@ class Pre_DDPM(pl.LightningModule):
 
         # pretrained model
         self.pre_dynamics = pre_model.edm.dynamics.dynamics
+        for _, params in self.pre_dynamics.named_parameters():
+            params.requires_grad = False
 
         if type(activation) is str:
             activation = get_activation(activation)
