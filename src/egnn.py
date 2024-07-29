@@ -795,16 +795,17 @@ class Pre_DynamicsWithPockets(Pre_Dynamics):
                 linker_mask=linker_mask_pre,
                 edge_mask=pre_info['edge_mask']
             )
-        h_pre_pad = torch.zeros(h_pre.shape[0], h.shape[1])
-        h_pre_pad[:, :h.shape[1]-2] = h_pre[:, :h.shape[1]-2]
-        h_pre_pad[:, -1] = h_pre[:, -1]
-        h_pre_pad = h_pre_pad.to(h.device)
+            h_pre_pad = torch.zeros(h_pre.shape[0], h.shape[1])
+            h_pre_pad[:, :h.shape[1]-2] = h_pre[:, :h.shape[1]-2]
+            h_pre_pad[:, -1] = h_pre[:, -1]
+            h_pre_pad = h_pre_pad.to(h.device)
 
         # add pretraining hidden h embedding for linker part of molecules
         for h_pre_idx, h_idx, mol_idx in zip(range(0, h_pre_pad.shape[0], n_nodes_pre), range(0, h.shape[0], n_nodes), pre_info['mol_index']):
             # h[h_idx: h_idx + mol_idx[0]] += h_pre_pad[h_pre_idx: h_pre_idx+mol_idx[0]]  # frag
             n_atom = mol_idx[2] - mol_idx[1] + mol_idx[0]
             h[h_idx + mol_idx[1]: h_idx + mol_idx[2]] += h_pre_pad[h_pre_idx + mol_idx[0]: h_pre_idx + n_atom]
+            h[h_idx + mol_idx[1]: h_idx + mol_idx[2]] /= 2.
         # Forward EGNN
         # Output: h_final (B*N, nf), x_final (B*N, 3), vel (B*N, 3)
         if self.model == 'egnn_dynamics':

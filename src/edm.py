@@ -792,15 +792,13 @@ class Pre_EDM(torch.nn.Module):
         z_t = xh * fragment_mask + z_t * linker_mask
 
         if pre_info is not None:
-            pre_info['x'], pre_info['h'] = self.normalize(pre_info['x'], pre_info['h'])
-            xh_pre = torch.cat([pre_info['x'], pre_info['h']], dim=2)
-            gamma_t_pre = self.inflate_batch_array(self.gamma(t), pre_info['x'])
-            alpha_t_pre = self.alpha(gamma_t_pre, pre_info['x'])
-            sigma_t_pre = self.sigma(gamma_t_pre, pre_info['x'])
-            eps_t_pre = self.sample_combined_position_feature_noise(n_samples=pre_info['x'].size(0),
-                                                                    n_nodes=pre_info['x'].size(1),
-                                                                    mask=pre_info['linker_mask'])
-            z_t_pre = alpha_t_pre * xh_pre + sigma_t_pre * eps_t_pre
+            x_pre, h_pre = self.normalize(pre_info['x'], pre_info['h'])
+            xh_pre = torch.cat([x_pre, h_pre], dim=2)
+            eps_t_pre = torch.zeros_like(xh_pre, device=xh.device)
+            for idx in pre_info['mol_index']:
+                eps_t_pre[:idx[0]] = eps_t[:idx[0]]
+                eps_t_pre[idx[0]: idx[0] + idx[2] - idx[1]] = eps_t[idx[1]: idx[2]]
+            z_t_pre = alpha_t * xh_pre + sigma_t * eps_t_pre
             pre_info['xh'] = xh_pre * pre_info['fragment_mask'] + z_t_pre * pre_info['linker_mask']
 
         # Neural net prediction
@@ -864,8 +862,8 @@ class Pre_EDM(torch.nn.Module):
         xh = torch.cat([x, h], dim=2)
 
         # Initial linker sampling from N(0, I)
-        z = self.sample_combined_position_feature_noise(n_samples, n_nodes, mask=linker_mask)
-        z = xh * fragment_mask + z * linker_mask
+        z_noise = self.sample_combined_position_feature_noise(n_samples, n_nodes, mask=linker_mask)
+        z = xh * fragment_mask + z_noise * linker_mask
 
         if keep_frames is None:
             keep_frames = self.T
@@ -874,12 +872,20 @@ class Pre_EDM(torch.nn.Module):
         chain = torch.zeros((keep_frames,) + z.size(), device=z.device)
 
         # pre
-        n_samples_pre = pre_info['x'].size(0)
-        n_nodes_pre = pre_info['x'].size(1)
-        x_pre, h_pre, = self.normalize(pre_info['x'], pre_info['h'])
+        # n_samples_pre = pre_info['x'].size(0)
+        # n_nodes_pre = pre_info['x'].size(1)
+        # x_pre, h_pre = self.normalize(pre_info['x'], pre_info['h'])
+        # xh_pre = torch.cat([x_pre, h_pre], dim=2)
+        # z_pre = self.sample_combined_position_feature_noise(n_samples_pre, n_nodes_pre, mask=pre_info['linker_mask'])
+        # pre_info['xh'] = xh_pre * pre_info['fragment_mask'] + z_pre * pre_info['linker_mask']
+
+        x_pre, h_pre = self.normalize(pre_info['x'], pre_info['h'])
         xh_pre = torch.cat([x_pre, h_pre], dim=2)
-        z_pre = self.sample_combined_position_feature_noise(n_samples_pre, n_nodes_pre, mask=pre_info['linker_mask'])
-        pre_info['xh'] = xh_pre * pre_info['fragment_mask'] + z_pre * pre_info['linker_mask']
+        z_noise_pre = torch.zeros_like(xh_pre, device=xh.device)
+        for idx in pre_info['mol_index']:
+            z_noise_pre[:idx[0]] = z_noise[:idx[0]]
+            z_noise_pre[idx[0]: idx[0] + idx[2] - idx[1]] = z_noise[idx[1]: idx[2]]
+        pre_info['xh'] = xh_pre * pre_info['fragment_mask'] + z_noise_pre * pre_info['linker_mask']
 
         # Sample p(z_s | z_t)
         for s in reversed(range(0, self.T)):
