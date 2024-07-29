@@ -795,9 +795,9 @@ class Pre_EDM(torch.nn.Module):
             x_pre, h_pre = self.normalize(pre_info['x'], pre_info['h'])
             xh_pre = torch.cat([x_pre, h_pre], dim=2)
             eps_t_pre = torch.zeros_like(xh_pre, device=xh.device)
-            for idx in pre_info['mol_index']:
-                eps_t_pre[:idx[0]] = eps_t[:idx[0]]
-                eps_t_pre[idx[0]: idx[0] + idx[2] - idx[1]] = eps_t[idx[1]: idx[2]]
+            for i, idx in enumerate(pre_info['mol_index']):
+                eps_t_pre[i, :idx[0]] = eps_t[i, :idx[0]]
+                eps_t_pre[i, idx[0]: idx[0] + idx[2] - idx[1]] = eps_t[i, idx[1]: idx[2]]
             z_t_pre = alpha_t * xh_pre + sigma_t * eps_t_pre
             pre_info['xh'] = xh_pre * pre_info['fragment_mask'] + z_t_pre * pre_info['linker_mask']
 
@@ -882,9 +882,9 @@ class Pre_EDM(torch.nn.Module):
         x_pre, h_pre = self.normalize(pre_info['x'], pre_info['h'])
         xh_pre = torch.cat([x_pre, h_pre], dim=2)
         z_noise_pre = torch.zeros_like(xh_pre, device=xh.device)
-        for idx in pre_info['mol_index']:
-            z_noise_pre[:idx[0]] = z_noise[:idx[0]]
-            z_noise_pre[idx[0]: idx[0] + idx[2] - idx[1]] = z_noise[idx[1]: idx[2]]
+        for i, idx in enumerate(pre_info['mol_index']):
+            z_noise_pre[i, :idx[0]] = z_noise[i, :idx[0]]
+            z_noise_pre[i, idx[0]: idx[0] + idx[2] - idx[1]] = z_noise[i, idx[1]: idx[2]]
         pre_info['xh'] = xh_pre * pre_info['fragment_mask'] + z_noise_pre * pre_info['linker_mask']
 
         # Sample p(z_s | z_t)
