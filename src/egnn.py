@@ -568,6 +568,8 @@ class Pre_Dynamics(nn.Module):
         self.context_node_nf_pre = 2
 
         self.pre_dynamics = pre_model
+        for _, params in self.pre_dynamics.named_parameters():
+            params.requires_grad = False
 
         in_node_nf = in_node_nf + context_node_nf + condition_time
         if self.model == 'egnn_dynamics':
