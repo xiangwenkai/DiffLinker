@@ -628,8 +628,6 @@ class Pre_DDPM(pl.LightningModule):
 
         # pretrained model
         self.pre_dynamics = pre_model.edm.dynamics.dynamics
-        for _, params in self.pre_dynamics.named_parameters():
-            params.requires_grad = False
 
         if type(activation) is str:
             activation = get_activation(activation)
@@ -1158,9 +1156,7 @@ class Pre_DDPM(pl.LightningModule):
         # nci_pre = data['nci_pre']
         # context_pre = torch.cat([anchors_pre, fragment_mask_pre, nci_pre], dim=-1)
         context_pre = torch.cat([anchors_pre, fragment_mask_pre], dim=-1)
-        pre_info = {'x': x_pre, 'h': h_pre, 'node_mask': node_mask_pre,
-                    'fragment_mask': fragment_mask_pre, 'linker_mask': linker_mask_pre,
-                    'edge_mask': edge_mask_pre, 'context': context_pre, 'mol_index': data['mol_index']}
+
         # Anchors and fragments labels are used as context
         if self.anchors_context:
             context = torch.cat([anchors, fragment_mask], dim=-1)
@@ -1193,6 +1189,13 @@ class Pre_DDPM(pl.LightningModule):
         else:
             raise NotImplementedError(self.center_of_mass)
         x = utils.remove_partial_mean_with_mask(x, node_mask, center_of_mass_mask)
+
+        center_of_mass_mask_pre = anchors_pre
+        x_pre = utils.remove_partial_mean_with_mask(x_pre, node_mask_pre, center_of_mass_mask_pre)
+        utils.assert_partial_mean_zero_with_mask(x_pre, node_mask_pre, center_of_mass_mask_pre)
+        pre_info = {'x': x_pre, 'h': h_pre, 'node_mask': node_mask_pre,
+                    'fragment_mask': fragment_mask_pre, 'linker_mask': linker_mask_pre,
+                    'edge_mask': edge_mask_pre, 'context': context_pre, 'mol_index': data['mol_index']}
 
         chain = self.edm.sample_chain(
             x=x,
