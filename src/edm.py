@@ -796,7 +796,7 @@ class Pre_EDM(torch.nn.Module):
             xh_pre = torch.cat([x_pre, h_pre], dim=2)
             eps_t_pre = torch.zeros_like(xh_pre, device=xh.device)
             for i, idx in enumerate(pre_info['mol_index']):
-                eps_t_pre[i, :idx[0]] = eps_t[i, :idx[0]]
+                # eps_t_pre[i, :idx[0]] = eps_t[i, :idx[0]]
                 eps_t_pre[i, idx[0]: idx[0] + idx[2] - idx[1]] = eps_t[i, idx[1]: idx[2]]
             z_t_pre = alpha_t * xh_pre + sigma_t * eps_t_pre
             pre_info['xh'] = xh_pre * pre_info['fragment_mask'] + z_t_pre * pre_info['linker_mask']
@@ -883,7 +883,7 @@ class Pre_EDM(torch.nn.Module):
         xh_pre = torch.cat([x_pre, h_pre], dim=2)
         z_noise_pre = torch.zeros_like(xh_pre, device=xh.device)
         for i, idx in enumerate(pre_info['mol_index']):
-            z_noise_pre[i, :idx[0]] = z_noise[i, :idx[0]]
+            # z_noise_pre[i, :idx[0]] = z_noise[i, :idx[0]]
             z_noise_pre[i, idx[0]: idx[0] + idx[2] - idx[1]] = z_noise[i, idx[1]: idx[2]]
         pre_info['xh'] = xh_pre * pre_info['fragment_mask'] + z_noise_pre * pre_info['linker_mask']
 
@@ -894,7 +894,7 @@ class Pre_EDM(torch.nn.Module):
             s_array = s_array / self.T
             t_array = t_array / self.T
 
-            z = self.sample_p_zs_given_zt_only_linker(
+            z, z_pre = self.sample_p_zs_given_zt_only_linker(
                 s=s_array,
                 t=t_array,
                 z_t=z,
@@ -905,6 +905,9 @@ class Pre_EDM(torch.nn.Module):
                 context=context,
                 pre_info=pre_info
             )
+            # update pretraining information!
+            pre_info['xh'] = z_pre
+
             write_index = (s * keep_frames) // self.T
             chain[write_index] = self.unnormalize_z(z)
 
@@ -930,9 +933,11 @@ class Pre_EDM(torch.nn.Module):
         sigma2_t_given_s, sigma_t_given_s, alpha_t_given_s = self.sigma_and_alpha_t_given_s(gamma_t, gamma_s, z_t)
         sigma_s = self.sigma(gamma_s, target_tensor=z_t)
         sigma_t = self.sigma(gamma_t, target_tensor=z_t)
+        sigma_s_pre = self.sigma(gamma_s, target_tensor=pre_info['xh'])
+        sigma_t_pre = self.sigma(gamma_t, target_tensor=pre_info['xh'])
 
         # Neural net prediction.
-        eps_hat = self.dynamics.forward(
+        eps_hat, eps_hat_pre = self.dynamics.forward(
             xh=z_t,
             t=t,
             node_mask=node_mask,
@@ -940,20 +945,26 @@ class Pre_EDM(torch.nn.Module):
             context=context,
             edge_mask=edge_mask,
             pre_info=pre_info,
+            val=True
         )
         eps_hat = eps_hat * linker_mask
+        eps_hat_pre = eps_hat_pre * pre_info['linker_mask']
 
         # Compute mu for p(z_s | z_t)
         mu = z_t / alpha_t_given_s - (sigma2_t_given_s / alpha_t_given_s / sigma_t) * eps_hat
+        mu_pre = pre_info['xh'] / alpha_t_given_s - (sigma2_t_given_s / alpha_t_given_s / sigma_t_pre) * eps_hat_pre
 
         # Compute sigma for p(z_s | z_t)
         sigma = sigma_t_given_s * sigma_s / sigma_t
+        sigma_pre = sigma_t_given_s * sigma_s_pre / sigma_t_pre
 
         # Sample z_s given the parameters derived from zt
         z_s = self.sample_normal(mu, sigma, linker_mask)
         z_s = z_t * fragment_mask + z_s * linker_mask
+        z_s_pre = self.sample_normal(mu_pre, sigma_pre, pre_info['linker_mask'])
+        z_s_pre = pre_info['xh'] * pre_info['fragment_mask'] + z_s_pre * pre_info['linker_mask']
 
-        return z_s
+        return z_s, z_s_pre
 
     def sample_p_xh_given_z0_only_linker(self, z_0, node_mask, fragment_mask, linker_mask, edge_mask, context, pre_info=None):
         """Samples x ~ p(x|z0). Samples only linker features and coords"""
