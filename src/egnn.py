@@ -1,3 +1,4 @@
+import copy
 import math
 import numpy as np
 import torch
@@ -605,8 +606,8 @@ class Pre_Dynamics(nn.Module):
             raise NotImplementedError
 
         self.edge_cache = {}
-        self.alpha = nn.Parameter(0.5 * torch.ones([]))
-        self.beta = nn.Parameter(0.5 * torch.ones([]))
+        self.alpha = 0.5
+        self.beta = 0.5
 
     def forward(self, t, xh, node_mask, linker_mask, edge_mask, context, pre_info=None):
         """
@@ -702,63 +703,6 @@ class Pre_Dynamics(nn.Module):
 
 
 class Pre_DynamicsWithPockets(Pre_Dynamics):
-    def __init__(
-            self, n_dims, in_node_nf, context_node_nf,
-            hidden_nf=64, device='cpu', activation=nn.SiLU(),
-            n_layers=4, attention=False, condition_time=True, tanh=False, norm_constant=0, inv_sublayers=2,
-            sin_embedding=False, normalization_factor=100, aggregation_method='sum', model='egnn_dynamics',
-            pre_model=None, normalization=None, centering=False,
-    ):
-        super().__init__()
-        self.device = device
-        self.n_dims = n_dims
-        self.context_node_nf = context_node_nf
-        self.condition_time = condition_time
-        self.model = model
-        self.centering = centering
-        self.context_node_nf_pre = 2
-
-        self.pre_dynamics = pre_model
-        for _, params in self.pre_dynamics.named_parameters():
-            params.requires_grad = False
-
-        in_node_nf = in_node_nf + context_node_nf + condition_time
-        if self.model == 'egnn_dynamics':
-            self.dynamics = EGNN(
-                in_node_nf=in_node_nf,
-                in_edge_nf=1,
-                hidden_nf=hidden_nf, device=device,
-                activation=activation,
-                n_layers=n_layers,
-                attention=attention,
-                tanh=tanh,
-                norm_constant=norm_constant,
-                inv_sublayers=inv_sublayers,
-                sin_embedding=sin_embedding,
-                normalization_factor=normalization_factor,
-                aggregation_method=aggregation_method,
-            )
-        elif self.model == 'gnn_dynamics':
-            self.dynamics = GNN(
-                in_node_nf=in_node_nf+3,
-                in_edge_nf=0,
-                hidden_nf=hidden_nf,
-                out_node_nf=in_node_nf+3,
-                device=device,
-                activation=activation,
-                n_layers=n_layers,
-                attention=attention,
-                normalization_factor=normalization_factor,
-                aggregation_method=aggregation_method,
-                normalization=normalization,
-            )
-        else:
-            raise NotImplementedError
-
-        self.edge_cache = {}
-        self.alpha = nn.Parameter(0.5 * torch.ones([]))
-        self.beta = nn.Parameter(0.5 * torch.ones([]))
-
     def forward(self, t, xh, node_mask, linker_mask, edge_mask, context, pre_info=None):
         """
         - t: (B)
