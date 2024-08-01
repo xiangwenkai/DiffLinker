@@ -606,6 +606,8 @@ class Pre_Dynamics(nn.Module):
             raise NotImplementedError
 
         self.edge_cache = {}
+        # self.alpha = nn.Parameter(0.5 * torch.ones([]))
+        # self.beta = nn.Parameter(0.5 * torch.ones([]))
         self.alpha = 0.5
         self.beta = 0.5
 
@@ -764,15 +766,16 @@ class Pre_DynamicsWithPockets(Pre_Dynamics):
             with torch.no_grad():
                 h_pre, x_pre = self.pre_dynamics(h_pre, x_pre, edges_pre, node_mask=node_mask_pre,
                                         linker_mask=linker_mask_pre, edge_mask=pre_info['edge_mask'])
-                h_pre_pad = torch.ones(h_pre.shape[0], h.shape[1], device=h.device)
-                h_pre_pad[:, :h.shape[1]-1] = h_pre[:, :h.shape[1]-1]
+                # print(f"x_pre coords: {x_pre[17:18]}")
+                # h_pre_pad = torch.ones(h_pre.shape[0], h.shape[1], device=h.device)
+                # h_pre_pad[:, :h.shape[1]-1] = h_pre[:, :h.shape[1]-1]
 
             # add pretraining hidden h embedding for linker part of molecules
-            for h_pre_idx, h_idx, mol_idx in zip(range(0, h_pre_pad.shape[0], n_nodes_pre), range(0, h.shape[0], n_nodes), pre_info['mol_index']):
+            for h_pre_idx, h_idx, mol_idx in zip(range(0, h_pre.shape[0], n_nodes_pre), range(0, h.shape[0], n_nodes), pre_info['mol_index']):
                 # h[h_idx: h_idx + mol_idx[0]] += h_pre_pad[h_pre_idx: h_pre_idx+mol_idx[0]]  # frag
                 n_atom = mol_idx[2] - mol_idx[1] + mol_idx[0]
                 x[h_idx + mol_idx[1]: h_idx + mol_idx[2]] = self.alpha*x[h_idx + mol_idx[1]: h_idx + mol_idx[2]] + (1-self.alpha)*x_pre[h_pre_idx + mol_idx[0]: h_pre_idx + n_atom]
-                h[h_idx + mol_idx[1]: h_idx + mol_idx[2]] = self.beta*h[h_idx + mol_idx[1]: h_idx + mol_idx[2]] + (1-self.beta)*h_pre_pad[h_pre_idx + mol_idx[0]: h_pre_idx + n_atom]
+                h[h_idx + mol_idx[1]: h_idx + mol_idx[2], :9] = self.beta*h[h_idx + mol_idx[1]: h_idx + mol_idx[2], :9] + (1-self.beta)*h_pre[h_pre_idx + mol_idx[0]: h_pre_idx + n_atom, :9]
         # Forward EGNN
         # Output: h_final (B*N, nf), x_final (B*N, 3), vel (B*N, 3)
         if self.model == 'egnn_dynamics':
@@ -784,6 +787,7 @@ class Pre_DynamicsWithPockets(Pre_Dynamics):
                 linker_mask=linker_mask,
                 edge_mask=None
             )
+            # print(f"x coords: {x_final[247:248]}")
             vel = (x_final - x) * node_mask  # This masking operation is redundant but just in case
         elif self.model == 'gnn_dynamics':
             xh = torch.cat([x, h], dim=1)

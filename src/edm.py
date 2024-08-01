@@ -898,6 +898,7 @@ class Pre_EDM(torch.nn.Module):
                 s=s_array, t=t_array, z_t=z, node_mask=node_mask,
                 fragment_mask=fragment_mask, linker_mask=linker_mask,
                 edge_mask=edge_mask, context=context, pre_info=pre_info)
+            # print(f"step{s} z coords: {z[0, 247:248, :3]}")
             # update pretraining information!
             for i, idx in enumerate(pre_info['mol_index']):
                 # pre_info['x'][i, :idx[0]] = z[i, :idx[0], :3]
@@ -910,7 +911,6 @@ class Pre_EDM(torch.nn.Module):
             # pre_info['x'] = utils.remove_partial_mean_with_mask(x_pre, pre_info['node_mask_pre'], center_of_mass_mask_pre)
             # pre_info['xh'] = torch.cat([pre_info['x'], pre_info['h']], dim=2)
             # pre_info['xh'] = pre_info['xh']*pre_info['fragment_mask']
-
             write_index = (s * keep_frames) // self.T
             chain[write_index] = self.unnormalize_z(z)
 
@@ -945,7 +945,7 @@ class Pre_EDM(torch.nn.Module):
             linker_mask=linker_mask,
             context=context,
             edge_mask=edge_mask,
-            pre_info=None,
+            pre_info=pre_info,
         )
         eps_hat = eps_hat * linker_mask
 
