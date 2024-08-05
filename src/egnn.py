@@ -3,7 +3,7 @@ import math
 import numpy as np
 import torch
 import torch.nn as nn
-
+from src.const import ATOM_TYPE
 from src import utils
 from pdb import set_trace
 
@@ -293,6 +293,34 @@ class SinusoidsEmbeddingNew(nn.Module):
         return emb.detach()
 
 
+class MLPBlock(nn.Module):
+
+    def __init__(self, in_features, out_features, bias=True, layer_norm=True, dropout=0.3, activation=nn.ReLU):
+        super().__init__()
+        self.linear = nn.Linear(in_features, out_features, bias)
+        self.activation = activation()
+        self.layer_norm = nn.LayerNorm(out_features) if layer_norm else None
+        self.dropout = nn.Dropout(dropout) if dropout else None
+
+    def forward(self, x):
+        x = self.activation(self.linear(x))
+        if self.layer_norm:
+            x = self.layer_norm(x)
+        if self.dropout:
+            x = self.dropout(x)
+        return x
+
+
+class Residual(nn.Module):
+
+    def __init__(self, fn):
+        super().__init__()
+        self.fn = fn
+
+    def forward(self, x):
+        return x + self.fn(x)
+
+
 def coord2diff(x, edge_index, norm_constant=1):
     row, col = edge_index
     coord_diff = x[row] - x[col]
@@ -406,14 +434,7 @@ class Dynamics(nn.Module):
         # Forward EGNN
         # Output: h_final (B*N, nf), x_final (B*N, 3), vel (B*N, 3)
         if self.model == 'egnn_dynamics':
-            h_final, x_final = self.dynamics(
-                h,
-                x,
-                edges,
-                node_mask=node_mask,
-                linker_mask=linker_mask,
-                edge_mask=edge_mask
-            )
+            h_final, x_final = self.dynamics(h,x,edges,node_mask=node_mask,linker_mask=linker_mask,edge_mask=edge_mask)
             vel = (x_final - x) * node_mask  # This masking operation is redundant but just in case
         elif self.model == 'gnn_dynamics':
             xh = torch.cat([x, h], dim=1)
@@ -605,11 +626,18 @@ class Pre_Dynamics(nn.Module):
         else:
             raise NotImplementedError
 
+        self.h_pre_linear = Residual(
+            nn.Sequential(
+                MLPBlock(ATOM_TYPE, ATOM_TYPE*4),
+                MLPBlock(ATOM_TYPE * 4, ATOM_TYPE)
+            )
+        )
+
         self.edge_cache = {}
-        # self.alpha = nn.Parameter(0.5 * torch.ones([]))
+        self.alpha = nn.Parameter(0.5 * torch.ones([]))
         # self.beta = nn.Parameter(0.5 * torch.ones([]))
-        self.alpha = 0.5
-        self.beta = 0.5
+        # self.alpha = 0.5
+        # self.beta = 0.5
 
     def forward(self, t, xh, node_mask, linker_mask, edge_mask, context, pre_info=None):
         """
@@ -739,6 +767,8 @@ class Pre_DynamicsWithPockets(Pre_Dynamics):
             context = context.view(bs*n_nodes, self.context_node_nf)
             h = torch.cat([h, context], dim=1)
 
+        h_update = h.clone()
+        x_update = x.clone()
         if pre_info is not None:
             # pretraining information
             bs_pre, n_nodes_pre = pre_info['xh'].shape[0], pre_info['xh'].shape[1]
@@ -764,30 +794,28 @@ class Pre_DynamicsWithPockets(Pre_Dynamics):
                 context_pre = pre_info['context'].view(bs_pre * n_nodes_pre, self.context_node_nf_pre)
                 h_pre = torch.cat([h_pre, context_pre], dim=1)
             with torch.no_grad():
-                h_pre, x_pre = self.pre_dynamics(h_pre, x_pre, edges_pre, node_mask=node_mask_pre,
+                h_final_pre, x_final_pre = self.pre_dynamics(h_pre, x_pre, edges_pre, node_mask=node_mask_pre,
                                         linker_mask=linker_mask_pre, edge_mask=pre_info['edge_mask'])
-                # print(f"x_pre coords: {x_pre[17:18]}")
-                # h_pre_pad = torch.ones(h_pre.shape[0], h.shape[1], device=h.device)
-                # h_pre_pad[:, :h.shape[1]-1] = h_pre[:, :h.shape[1]-1]
+                # print(f"x_pre coords: {x_pre[pre_info['mol_index'][0][0]]}")
 
             # add pretraining hidden h embedding for linker part of molecules
-            for h_pre_idx, h_idx, mol_idx in zip(range(0, h_pre.shape[0], n_nodes_pre), range(0, h.shape[0], n_nodes), pre_info['mol_index']):
-                # h[h_idx: h_idx + mol_idx[0]] += h_pre_pad[h_pre_idx: h_pre_idx+mol_idx[0]]  # frag
+            # h_final_pre = self.h_pre_linear(h_final_pre[:, :ATOM_TYPE])
+            for h_pre_idx, h_idx, mol_idx in zip(range(0, h_final_pre.shape[0], n_nodes_pre), range(0, h.shape[0], n_nodes), pre_info['mol_index']):
                 n_atom = mol_idx[2] - mol_idx[1] + mol_idx[0]
-                x[h_idx + mol_idx[1]: h_idx + mol_idx[2]] = self.alpha*x[h_idx + mol_idx[1]: h_idx + mol_idx[2]] + (1-self.alpha)*x_pre[h_pre_idx + mol_idx[0]: h_pre_idx + n_atom]
-                h[h_idx + mol_idx[1]: h_idx + mol_idx[2], :9] = self.beta*h[h_idx + mol_idx[1]: h_idx + mol_idx[2], :9] + (1-self.beta)*h_pre[h_pre_idx + mol_idx[0]: h_pre_idx + n_atom, :9]
+                x_update[h_idx + mol_idx[1]: h_idx + mol_idx[2]] = self.alpha*x[h_idx + mol_idx[1]: h_idx + mol_idx[2]] + (1.-self.alpha)*x_final_pre[h_pre_idx + mol_idx[0]: h_pre_idx + n_atom]
+                # h_update[h_idx + mol_idx[1]: h_idx + mol_idx[2], :ATOM_TYPE] = self.beta*h[h_idx + mol_idx[1]: h_idx + mol_idx[2], :ATOM_TYPE] + (1.-self.beta)*h_final_pre[h_pre_idx + mol_idx[0]: h_pre_idx + n_atom, :ATOM_TYPE]
         # Forward EGNN
         # Output: h_final (B*N, nf), x_final (B*N, 3), vel (B*N, 3)
         if self.model == 'egnn_dynamics':
             h_final, x_final = self.dynamics(
-                h,
-                x,
+                h_update,
+                x_update,
                 edges,
                 node_mask=node_mask,
                 linker_mask=linker_mask,
                 edge_mask=None
             )
-            # print(f"x coords: {x_final[247:248]}")
+            # print(f"x coords: {x_final[pre_info['mol_index'][0][1]]}")
             vel = (x_final - x) * node_mask  # This masking operation is redundant but just in case
         elif self.model == 'gnn_dynamics':
             xh = torch.cat([x, h], dim=1)

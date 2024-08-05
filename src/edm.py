@@ -888,6 +888,7 @@ class Pre_EDM(torch.nn.Module):
         pre_info['xh'] = xh_pre * pre_info['fragment_mask'] + z_noise_pre * pre_info['linker_mask']
 
         # Sample p(z_s | z_t)
+        # pre_info['k'] = 0
         for s in reversed(range(0, self.T)):
             s_array = torch.full((n_samples, 1), fill_value=s, device=z.device)
             t_array = s_array + 1
@@ -898,14 +899,14 @@ class Pre_EDM(torch.nn.Module):
                 s=s_array, t=t_array, z_t=z, node_mask=node_mask,
                 fragment_mask=fragment_mask, linker_mask=linker_mask,
                 edge_mask=edge_mask, context=context, pre_info=pre_info)
-            # print(f"step{s} z coords: {z[0, 247:248, :3]}")
+            print(f"step{s} z coords: {z[0, pre_info['mol_index'][0][1], :3]}")
             # update pretraining information!
             for i, idx in enumerate(pre_info['mol_index']):
                 # pre_info['x'][i, :idx[0]] = z[i, :idx[0], :3]
                 # pre_info['x'][i, idx[0]: idx[0] + idx[2] - idx[1]] = z[i, idx[1]: idx[2], :3]
                 # pre_info['h'][i, :idx[0]] = z[i, :idx[0], 3:12]
                 # pre_info['h'][i, idx[0]: idx[0] + idx[2] - idx[1]] = z[i, idx[1]: idx[2], 3:12]
-                pre_info['xh'][i, idx[0]: idx[0] + idx[2] - idx[1], :12] = z[i, idx[1]: idx[2], :12]
+                pre_info['xh'][i, idx[0]: idx[0] + idx[2] - idx[1]] = z[i, idx[1]: idx[2], :12]
             # pre_info['x'], pre_info['h'] = self.normalize(pre_info['x'], pre_info['h'])
             # center_of_mass_mask_pre = pre_info['anchors']
             # pre_info['x'] = utils.remove_partial_mean_with_mask(x_pre, pre_info['node_mask_pre'], center_of_mass_mask_pre)
@@ -913,6 +914,7 @@ class Pre_EDM(torch.nn.Module):
             # pre_info['xh'] = pre_info['xh']*pre_info['fragment_mask']
             write_index = (s * keep_frames) // self.T
             chain[write_index] = self.unnormalize_z(z)
+            # pre_info['k'] += 1
 
         # Finally sample p(x, h | z_0)
         x, h = self.sample_p_xh_given_z0_only_linker(
