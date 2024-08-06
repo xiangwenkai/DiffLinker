@@ -669,7 +669,7 @@ class Pre_DDPM(pl.LightningModule):
     def setup(self, stage: Optional[str] = None):
         dataset_type = MOADDataset if '.' in self.train_data_prefix else ZincDataset
         if stage == 'fit':
-            self.is_geom = ('geom' in self.train_data_prefix) or ('MOAD' in self.train_data_prefix)
+            self.is_geom = ('geom' in self.train_data_prefix) or ('pcqm4m' in self.train_data_prefix) or ('MOAD' in self.train_data_prefix)
             self.train_dataset = dataset_type(
                 data_path=self.data_path,
                 prefix=self.train_data_prefix,
@@ -681,7 +681,7 @@ class Pre_DDPM(pl.LightningModule):
                 device=self.torch_device
             )
         elif stage == 'val':
-            self.is_geom = ('geom' in self.val_data_prefix) or ('MOAD' in self.val_data_prefix)
+            self.is_geom = ('geom' in self.val_data_prefix) or ('pcqm4m' in self.train_data_prefix) or ('MOAD' in self.val_data_prefix)
             self.val_dataset = dataset_type(
                 data_path=self.data_path,
                 prefix=self.val_data_prefix,
