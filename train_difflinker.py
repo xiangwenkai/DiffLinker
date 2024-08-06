@@ -7,7 +7,7 @@ import yaml
 from datetime import datetime
 from pytorch_lightning import Trainer, callbacks, loggers
 
-from src.const import NUMBER_OF_ATOM_TYPES, GEOM_NUMBER_OF_ATOM_TYPES, NCI_TYPE
+from src.const import NUMBER_OF_ATOM_TYPES, GEOM_NUMBER_OF_ATOM_TYPES
 from src.lightning import DDPM
 from src.utils import disable_rdkit_logging, Logger
 
@@ -55,6 +55,11 @@ def main(args):
     if '.' in args.train_data_prefix:
         context_node_nf += 1
 
+    # ddpm = DDPM.load_from_checkpoint('models/geom_difflinker_given_anchors.ckpt', map_location='cpu') # ddpm_pre.named_parameters().__next__()
+    # ddpm.batch_size = 64
+    # ddpm.test_epochs = 2
+    # ddpm.data_path = 'datasets'
+
     ddpm = DDPM(
         data_path=args.data,
         train_data_prefix=args.train_data_prefix,
@@ -92,8 +97,7 @@ def main(args):
         inpainting=args.inpainting,
         anchors_context=anchors_context,
     )
-    # ddpm_pre = DDPM.load_from_checkpoint('models/teste17.ckpt', map_location='cpu') # ddpm_pre.named_parameters().__next__()
-    # ddpm.edm = ddpm_pre.edm
+
     checkpoint_callback = callbacks.ModelCheckpoint(
         dirpath=checkpoints_dir,
         filename=experiment + '_{epoch:02d}',
