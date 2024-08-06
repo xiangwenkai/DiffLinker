@@ -589,8 +589,8 @@ class Pre_Dynamics(nn.Module):
         self.centering = centering
         self.context_node_nf_pre = 2
 
-        self.pre_dynamics = pre_model
-        for _, params in self.pre_dynamics.named_parameters():
+        self.pre_edm = pre_model
+        for _, params in self.pre_edm.named_parameters():
             params.requires_grad = False
 
         in_node_nf = in_node_nf + context_node_nf + condition_time
@@ -626,18 +626,18 @@ class Pre_Dynamics(nn.Module):
         else:
             raise NotImplementedError
 
-        self.h_pre_linear = Residual(
-            nn.Sequential(
-                MLPBlock(ATOM_TYPE, ATOM_TYPE*4),
-                MLPBlock(ATOM_TYPE * 4, ATOM_TYPE)
-            )
-        )
+        # self.h_pre_linear = Residual(
+        #     nn.Sequential(
+        #         MLPBlock(ATOM_TYPE, ATOM_TYPE*4),
+        #         MLPBlock(ATOM_TYPE * 4, ATOM_TYPE)
+        #     )
+        # )
 
         self.edge_cache = {}
-        self.alpha = nn.Parameter(0.5 * torch.ones([]))
-        # self.beta = nn.Parameter(0.5 * torch.ones([]))
-        # self.alpha = 0.5
-        # self.beta = 0.5
+        # self.w1 = nn.Parameter(0.5 * torch.ones([]))
+        # self.w2 = nn.Parameter(0.5 * torch.ones([]))
+        self.w1 = 0.7
+        # self.w2 = 0.5
 
     def forward(self, t, xh, node_mask, linker_mask, edge_mask, context, pre_info=None):
         """
@@ -741,34 +741,7 @@ class Pre_DynamicsWithPockets(Pre_Dynamics):
         - edge_mask: (B*N*N, 1)
         - context: (B, N, C)
         """
-
-        bs, n_nodes = xh.shape[0], xh.shape[1]
-        node_mask = node_mask.view(bs * n_nodes, 1)  # (B*N, 1)
-
-        if linker_mask is not None:
-            linker_mask = linker_mask.view(bs * n_nodes, 1)  # (B*N, 1)
-
-        # Reshaping node features & adding time feature
-        xh = xh.view(bs * n_nodes, -1).clone() * node_mask  # (B*N, D)
-        x = xh[:, :self.n_dims].clone()  # (B*N, 3)
-        h = xh[:, self.n_dims:].clone()  # (B*N, nf)
-
-        edges = self.get_dist_edges(x, node_mask, edge_mask)
-        if self.condition_time:
-            if np.prod(t.size()) == 1:
-                # t is the same for all elements in batch.
-                h_time = torch.empty_like(h[:, 0:1]).fill_(t.item())
-            else:
-                # t is different over the batch dimension.
-                h_time = t.view(bs, 1).repeat(1, n_nodes)
-                h_time = h_time.view(bs * n_nodes, 1)
-            h = torch.cat([h, h_time], dim=1)  # (B*N, nf+1)
-        if context is not None:
-            context = context.view(bs*n_nodes, self.context_node_nf)
-            h = torch.cat([h, context], dim=1)
-
-        h_update = h.clone()
-        x_update = x.clone()
+        xh_update = xh.clone()
         if pre_info is not None:
             # pretraining information
             bs_pre, n_nodes_pre = pre_info['xh'].shape[0], pre_info['xh'].shape[1]
@@ -794,22 +767,107 @@ class Pre_DynamicsWithPockets(Pre_Dynamics):
                 context_pre = pre_info['context'].view(bs_pre * n_nodes_pre, self.context_node_nf_pre)
                 h_pre = torch.cat([h_pre, context_pre], dim=1)
             with torch.no_grad():
-                h_final_pre, x_final_pre = self.pre_dynamics(h_pre, x_pre, edges_pre, node_mask=node_mask_pre,
-                                        linker_mask=linker_mask_pre, edge_mask=pre_info['edge_mask'])
-                # print(f"x_pre coords: {x_pre[pre_info['mol_index'][0][0]]}")
+                h_final_pre, x_final_pre = self.pre_edm.dynamics.dynamics(h_pre, x_pre, edges_pre, node_mask=node_mask_pre,
+                                                             linker_mask=linker_mask_pre,
+                                                             edge_mask=pre_info['edge_mask'])
+                # print(f"x_pre coords: {x_final_pre[pre_info['mol_index'][0][0]]}")
 
+                # =========================processing===============================
+                vel_pre = torch.clamp(x_final_pre - x_pre, min=-100, max=100) * node_mask_pre
+                if context is not None:
+                    h_final_pre = h_final_pre[:, :-self.context_node_nf_pre]
+                if self.condition_time:
+                    h_final_pre = h_final_pre[:, :-1]
+                vel_pre = vel_pre.view(bs_pre, n_nodes_pre, -1)  # (B, N, 3)
+                h_final_pre = h_final_pre.view(bs_pre, n_nodes_pre, -1)  # (B, N, D)
+                node_mask_pre = node_mask_pre.view(bs_pre, n_nodes_pre, 1)  # (B, N, 1)
+                if torch.any(torch.isnan(vel_pre)) or torch.any(torch.isnan(h_final_pre)):
+                    raise utils.FoundNaNException(vel_pre, h_final_pre)
+                if self.centering:
+                    vel_pre = utils.remove_mean_with_mask(vel_pre, node_mask_pre)
+                eps_hat_pre = torch.cat([vel_pre, h_final_pre], dim=2)
+                eps_hat_pre = eps_hat_pre * pre_info['linker_mask']
+
+                t_is_zero = (t == 0.).float().unsqueeze(dim=-1)
+                t_is_not_zero = 1. - t_is_zero
+
+
+                zero_num = sum(t_is_zero).item()
+                if zero_num == 0:
+                    mu_pre = pre_info['xh'] / pre_info['alpha_t_given_s'] - (
+                            pre_info['sigma2_t_given_s'] / pre_info['alpha_t_given_s'] / pre_info['sigma_t']) * eps_hat_pre
+                    sigma_pre = pre_info['sigma_t_given_s'] * pre_info['sigma_s'] / pre_info['sigma_t']
+                elif zero_num == pre_info['xh'].size(0):
+                    zeros = torch.zeros(size=(pre_info['xh'].size(0), 1))
+                    gamma_0 = self.pre_edm.gamma(zeros).to(pre_info['xh'].device)
+                    sigma_pre = self.SNR(-0.5 * gamma_0).unsqueeze(1)
+                    mu_pre = self.compute_x_pred(eps_t=eps_hat_pre, z_t=pre_info['xh'], gamma_t=gamma_0)
+                else:
+                    mu_pre = pre_info['xh'] / pre_info['alpha_t_given_s'] - (
+                            pre_info['sigma2_t_given_s'] / pre_info['alpha_t_given_s'] / pre_info[
+                        'sigma_t']) * eps_hat_pre
+                    sigma_pre = torch.nan_to_num(pre_info['sigma_t_given_s'] * pre_info['sigma_s'] / pre_info['sigma_t'], nan=0.0, posinf=1e10, neginf=-1e10)
+                    zeros = torch.zeros(size=(pre_info['xh'].size(0), 1))
+                    gamma_0 = self.pre_edm.gamma(zeros).to(pre_info['xh'].device)
+                    sigma_x = self.SNR(-0.5 * gamma_0).unsqueeze(1)
+                    mu_x = self.compute_x_pred(eps_t=eps_hat_pre, z_t=pre_info['xh'], gamma_t=gamma_0)
+                    mu_pre = mu_pre * t_is_not_zero + mu_x * t_is_zero
+                    sigma_pre = sigma_pre * t_is_not_zero + sigma_x * t_is_zero
+                '''
+                mu_pre = pre_info['xh'] / pre_info['alpha_t_given_s'] - (
+                        pre_info['sigma2_t_given_s'] / pre_info['alpha_t_given_s'] / pre_info[
+                    'sigma_t']) * eps_hat_pre
+                sigma_pre = torch.nan_to_num(pre_info['sigma_t_given_s'] * pre_info['sigma_s'] / pre_info['sigma_t'], nan=0.0, posinf=1e10, neginf=-1e10)
+                '''
+
+                z_s_pre = self.sample_normal(mu_pre, sigma_pre, pre_info['linker_mask'])
+                z_s_pre = pre_info['xh'] * pre_info['fragment_mask'] + z_s_pre * pre_info['linker_mask']
+                # print(f"x_pre coords: {z_s_pre[0][pre_info['mol_index'][0][0]][:3]}")
+
+                # =========================processing===============================
+            for i, idx in enumerate(pre_info['mol_index']):
+                # if t_is_not_zero[i, 0, 0].item() == 1.:
+                xh_update[i, idx[1]: idx[2], :3] = self.w1*xh[i, idx[1]: idx[2], :3] + (1-self.w1)*z_s_pre[i, idx[0]: idx[0] + idx[2] - idx[1], :3]
             # add pretraining hidden h embedding for linker part of molecules
             # h_final_pre = self.h_pre_linear(h_final_pre[:, :ATOM_TYPE])
-            for h_pre_idx, h_idx, mol_idx in zip(range(0, h_final_pre.shape[0], n_nodes_pre), range(0, h.shape[0], n_nodes), pre_info['mol_index']):
-                n_atom = mol_idx[2] - mol_idx[1] + mol_idx[0]
-                x_update[h_idx + mol_idx[1]: h_idx + mol_idx[2]] = self.alpha*x[h_idx + mol_idx[1]: h_idx + mol_idx[2]] + (1.-self.alpha)*x_final_pre[h_pre_idx + mol_idx[0]: h_pre_idx + n_atom]
-                # h_update[h_idx + mol_idx[1]: h_idx + mol_idx[2], :ATOM_TYPE] = self.beta*h[h_idx + mol_idx[1]: h_idx + mol_idx[2], :ATOM_TYPE] + (1.-self.beta)*h_final_pre[h_pre_idx + mol_idx[0]: h_pre_idx + n_atom, :ATOM_TYPE]
+            # for h_pre_idx, h_idx, mol_idx in zip(range(0, h_final_pre.shape[0], n_nodes_pre),
+            #                                      range(0, h.shape[0], n_nodes), pre_info['mol_index']):
+            #     n_atom = mol_idx[2] - mol_idx[1] + mol_idx[0]
+            #     x_update[h_idx + mol_idx[1]: h_idx + mol_idx[2]] = self.alpha * x[h_idx + mol_idx[1]: h_idx + mol_idx[
+            #         2]] + (1. - self.alpha) * x_final_pre[h_pre_idx + mol_idx[0]: h_pre_idx + n_atom]
+            #     # h_update[h_idx + mol_idx[1]: h_idx + mol_idx[2], :ATOM_TYPE] = self.beta*h[h_idx + mol_idx[1]: h_idx + mol_idx[2], :ATOM_TYPE] + (1.-self.beta)*h_final_pre[h_pre_idx + mol_idx[0]: h_pre_idx + n_atom, :ATOM_TYPE]
+
+        bs, n_nodes = xh.shape[0], xh.shape[1]
+        node_mask = node_mask.view(bs * n_nodes, 1)  # (B*N, 1)
+
+        if linker_mask is not None:
+            linker_mask = linker_mask.view(bs * n_nodes, 1)  # (B*N, 1)
+
+        # Reshaping node features & adding time feature
+        xh_update = xh_update.view(bs * n_nodes, -1).clone() * node_mask  # (B*N, D)
+        x = xh_update[:, :self.n_dims].clone()  # (B*N, 3)
+        h = xh_update[:, self.n_dims:].clone()  # (B*N, nf)
+
+        edges = self.get_dist_edges(x, node_mask, edge_mask)
+        if self.condition_time:
+            if np.prod(t.size()) == 1:
+                # t is the same for all elements in batch.
+                h_time = torch.empty_like(h[:, 0:1]).fill_(t.item())
+            else:
+                # t is different over the batch dimension.
+                h_time = t.view(bs, 1).repeat(1, n_nodes)
+                h_time = h_time.view(bs * n_nodes, 1)
+            h = torch.cat([h, h_time], dim=1)  # (B*N, nf+1)
+        if context is not None:
+            context = context.view(bs*n_nodes, self.context_node_nf)
+            h = torch.cat([h, context], dim=1)
+
         # Forward EGNN
         # Output: h_final (B*N, nf), x_final (B*N, 3), vel (B*N, 3)
         if self.model == 'egnn_dynamics':
             h_final, x_final = self.dynamics(
-                h_update,
-                x_update,
+                h,
+                x,
                 edges,
                 node_mask=node_mask,
                 linker_mask=linker_mask,
@@ -844,6 +902,44 @@ class Pre_DynamicsWithPockets(Pre_Dynamics):
             vel = utils.remove_mean_with_mask(vel, node_mask)
         return torch.cat([vel, h_final], dim=2)
 
+    def sample_normal(self, mu, sigma, node_mask):
+        """Samples from a Normal distribution."""
+        eps = self.sample_combined_position_feature_noise(mu.size(0), mu.size(1), node_mask)
+        return mu + sigma * eps
+
+    def sample_combined_position_feature_noise(self, n_samples, n_nodes, mask):
+        z_x = utils.sample_gaussian_with_mask(
+            size=(n_samples, n_nodes, self.n_dims),
+            device=mask.device,
+            node_mask=mask
+        )
+        z_h = utils.sample_gaussian_with_mask(
+            size=(n_samples, n_nodes, ATOM_TYPE),
+            device=mask.device,
+            node_mask=mask
+        )
+        z = torch.cat([z_x, z_h], dim=2)
+        return z
+
+    def alpha(self, gamma, target_tensor):
+        """Computes alpha given gamma."""
+        return self.inflate_batch_array(torch.sqrt(torch.sigmoid(-gamma)), target_tensor)
+
+    def sigma(self, gamma, target_tensor):
+        """Computes sigma given gamma."""
+        return self.inflate_batch_array(torch.sqrt(torch.sigmoid(gamma)), target_tensor)
+
+    def compute_x_pred(self, eps_t, z_t, gamma_t):
+        """Computes x_pred, i.e. the most likely prediction of x."""
+        sigma_t = self.sigma(gamma_t, target_tensor=eps_t)
+        alpha_t = self.alpha(gamma_t, target_tensor=eps_t)
+        x_pred = 1. / alpha_t * (z_t - sigma_t * eps_t)
+        return x_pred
+
+    def SNR(self, gamma):
+        """Computes signal to noise ratio (alpha^2/sigma^2) given gamma."""
+        return torch.exp(-gamma)
+
     @staticmethod
     def get_dist_edges(x, node_mask, batch_mask):
         node_mask = node_mask.squeeze().bool()
@@ -854,3 +950,13 @@ class Pre_DynamicsWithPockets(Pre_Dynamics):
         adj = batch_adj & nodes_adj & dists_adj & rm_self_loops
         edges = torch.stack(torch.where(adj))
         return edges
+
+    @staticmethod
+    def inflate_batch_array(array, target):
+        """
+        Inflates the batch array (array) with only a single axis (i.e. shape = (batch_size,),
+        or possibly more empty axes (i.e. shape (batch_size, 1, ..., 1)) to match the target shape.
+        """
+        target_shape = (array.size(0),) + (1,) * (len(target.size()) - 1)
+        return array.view(target_shape)
+

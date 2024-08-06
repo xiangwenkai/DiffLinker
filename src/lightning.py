@@ -627,7 +627,7 @@ class Pre_DDPM(pl.LightningModule):
         self.is_geom = ('geom' in self.train_data_prefix) or ('MOAD' in self.train_data_prefix)
 
         # pretrained model
-        self.pre_dynamics = pre_model.edm.dynamics.dynamics
+        self.pre_edm = pre_model.edm
 
         if type(activation) is str:
             activation = get_activation(activation)
@@ -649,7 +649,7 @@ class Pre_DDPM(pl.LightningModule):
             normalization_factor=normalization_factor,
             aggregation_method=aggregation_method,
             model=model,
-            pre_model=self.pre_dynamics,
+            pre_model=self.pre_edm,
             normalization=normalization,
             centering=inpainting,
         )

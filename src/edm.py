@@ -786,10 +786,6 @@ class Pre_EDM(torch.nn.Module):
         # Note: only for linker
         eps_t = self.sample_combined_position_feature_noise(n_samples=x.size(0), n_nodes=x.size(1), mask=linker_mask)
 
-        # Sample z_t given x, h for timestep t, from q(z_t | x, h)
-        # Note: keep fragments unchanged
-        z_t = alpha_t * xh + sigma_t * eps_t
-        z_t = xh * fragment_mask + z_t * linker_mask
 
         if pre_info is not None:
             x_pre, h_pre = self.normalize(pre_info['x'], pre_info['h'])
@@ -800,6 +796,23 @@ class Pre_EDM(torch.nn.Module):
                 eps_t_pre[i, idx[0]: idx[0] + idx[2] - idx[1]] = eps_t[i, idx[1]: idx[2]]
             z_t_pre = alpha_t * xh_pre + sigma_t * eps_t_pre
             pre_info['xh'] = xh_pre * pre_info['fragment_mask'] + z_t_pre * pre_info['linker_mask']
+
+
+        gamma_s_pre = self.gamma(s)
+        gamma_t_pre = self.gamma(t)
+
+        sigma2_t_given_s, sigma_t_given_s, alpha_t_given_s = self.sigma_and_alpha_t_given_s(gamma_t_pre, gamma_s_pre,
+                                                                                            pre_info['xh'])
+        sigma_s_pre = self.sigma(gamma_s_pre, target_tensor=pre_info['xh'])
+        sigma_t_pre = self.sigma(gamma_t_pre, target_tensor=pre_info['xh'])
+        pre_info['sigma2_t_given_s'], pre_info['sigma_t_given_s'], pre_info['alpha_t_given_s'], pre_info['sigma_s'], \
+        pre_info['sigma_t'] = sigma2_t_given_s, sigma_t_given_s, alpha_t_given_s, sigma_s_pre, sigma_t_pre
+
+
+        # Sample z_t given x, h for timestep t, from q(z_t | x, h)
+        # Note: keep fragments unchanged
+        z_t = alpha_t * xh + sigma_t * eps_t
+        z_t = xh * fragment_mask + z_t * linker_mask
 
         # Neural net prediction
         eps_t_hat = self.dynamics.forward(
@@ -899,7 +912,7 @@ class Pre_EDM(torch.nn.Module):
                 s=s_array, t=t_array, z_t=z, node_mask=node_mask,
                 fragment_mask=fragment_mask, linker_mask=linker_mask,
                 edge_mask=edge_mask, context=context, pre_info=pre_info)
-            # print(f"step{s} z coords: {z[0, pre_info['mol_index'][0][1], :3]}")
+            print(f"step{s} z coords: {z[0, pre_info['mol_index'][0][1], :3]}")
             # update pretraining information!
             for i, idx in enumerate(pre_info['mol_index']):
                 # pre_info['x'][i, :idx[0]] = z[i, :idx[0], :3]
@@ -939,6 +952,7 @@ class Pre_EDM(torch.nn.Module):
         sigma_s = self.sigma(gamma_s, target_tensor=z_t)
         sigma_t = self.sigma(gamma_t, target_tensor=z_t)
 
+        pre_info['sigma2_t_given_s'], pre_info['sigma_t_given_s'], pre_info['alpha_t_given_s'], pre_info['sigma_s'], pre_info['sigma_t'] = sigma2_t_given_s, sigma_t_given_s, alpha_t_given_s, sigma_s, sigma_t
         # Neural net prediction.
         eps_hat = self.dynamics.forward(
             xh=z_t,
