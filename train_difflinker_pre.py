@@ -97,6 +97,8 @@ def main(args):
         anchors_context=anchors_context,
     )
 
+    ddpm.edm.dynamics.dynamics = DDPM.load_from_checkpoint('models/pre120.ckpt').edm.dynamics.dynamics
+
     checkpoint_callback = callbacks.ModelCheckpoint(
         dirpath=checkpoints_dir,
         filename=experiment + '_{epoch:02d}',

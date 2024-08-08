@@ -912,13 +912,9 @@ class Pre_EDM(torch.nn.Module):
                 s=s_array, t=t_array, z_t=z, node_mask=node_mask,
                 fragment_mask=fragment_mask, linker_mask=linker_mask,
                 edge_mask=edge_mask, context=context, pre_info=pre_info)
-            print(f"step{s} z coords: {z[0, pre_info['mol_index'][0][1], :3]}")
+            # print(f"step{s} z coords: {z[0, pre_info['mol_index'][0][1], :3]}")
             # update pretraining information!
             for i, idx in enumerate(pre_info['mol_index']):
-                # pre_info['x'][i, :idx[0]] = z[i, :idx[0], :3]
-                # pre_info['x'][i, idx[0]: idx[0] + idx[2] - idx[1]] = z[i, idx[1]: idx[2], :3]
-                # pre_info['h'][i, :idx[0]] = z[i, :idx[0], 3:12]
-                # pre_info['h'][i, idx[0]: idx[0] + idx[2] - idx[1]] = z[i, idx[1]: idx[2], 3:12]
                 pre_info['xh'][i, idx[0]: idx[0] + idx[2] - idx[1]] = z[i, idx[1]: idx[2], :12]
             # pre_info['x'], pre_info['h'] = self.normalize(pre_info['x'], pre_info['h'])
             # center_of_mass_mask_pre = pre_info['anchors']
