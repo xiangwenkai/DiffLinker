@@ -1,7 +1,7 @@
-exp_name: 'geom'
+exp_name: 'reproduce_moad'
 data: datasets
-train_data_prefix: geom_multifrag_test_difflinker
-val_data_prefix: geom_multifrag_test_difflinker
+train_data_prefix: MOAD_val.full
+val_data_prefix: MOAD_val.full
 checkpoints: models
 logs: logs
 device: gpu
@@ -10,12 +10,12 @@ wandb_entity: null
 enable_progress_bar: False
 
 model: egnn_dynamics
-lr: 2.0e-4
-batch_size: 64
+lr: 0.
+batch_size: 16
 n_layers: 6
-n_epochs: 100
-test_epochs: 20
-n_stability_samples: 5
+n_epochs: 1
+test_epochs: 1
+n_stability_samples: 10
 nf: 128
 activation: silu
 attention: False
@@ -27,7 +27,6 @@ include_charges: False
 diffusion_loss_type: l2
 data_augmentation: False
 center_of_mass: anchors
-inpainting: False
 
 sin_embedding: False
 normalization_factor: 100
