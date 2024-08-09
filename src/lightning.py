@@ -45,7 +45,7 @@ class DDPM(pl.LightningModule):
         normalize_factors, include_charges, model,
         data_path, train_data_prefix, val_data_prefix, batch_size, lr, torch_device, test_epochs, n_stability_samples,
         normalization=None, log_iterations=None, samples_dir=None, data_augmentation=False,
-        center_of_mass='fragments', inpainting=False, anchors_context=True,
+        center_of_mass='fragments', inpainting=False, anchors_context=True, graph_type=None,
     ):
         super(DDPM, self).__init__()
 
@@ -73,6 +73,9 @@ class DDPM(pl.LightningModule):
 
         self.is_geom = ('geom' in self.train_data_prefix) or ('MOAD' in self.train_data_prefix)
 
+        if graph_type is None:
+            graph_type = '4A' if '.' in train_data_prefix else 'FC'
+
         if type(activation) is str:
             activation = get_activation(activation)
 
@@ -95,6 +98,7 @@ class DDPM(pl.LightningModule):
             model=model,
             normalization=normalization,
             centering=inpainting,
+            graph_type=graph_type,
         )
         edm_class = InpaintingEDM if inpainting else EDM
         self.edm = edm_class(
@@ -598,7 +602,7 @@ class Pre_DDPM(pl.LightningModule):
         normalize_factors, include_charges, model, pre_model,
         data_path, train_data_prefix, val_data_prefix, batch_size, lr, torch_device, test_epochs, n_stability_samples,
         normalization=None, log_iterations=None, samples_dir=None, data_augmentation=False,
-        center_of_mass='fragments', inpainting=False, anchors_context=True,
+        center_of_mass='fragments', inpainting=False, anchors_context=True, graph_type=None,
     ):
         super(Pre_DDPM, self).__init__()
 
@@ -626,6 +630,9 @@ class Pre_DDPM(pl.LightningModule):
 
         self.is_geom = ('geom' in self.train_data_prefix) or ('MOAD' in self.train_data_prefix)
 
+        if graph_type is None:
+            graph_type = '4A' if '.' in train_data_prefix else 'FC'
+
         # pretrained model
         self.pre_edm = pre_model.edm
 
@@ -652,6 +659,7 @@ class Pre_DDPM(pl.LightningModule):
             pre_model=self.pre_edm,
             normalization=normalization,
             centering=inpainting,
+            graph_type=graph_type,
         )
         edm_class = InpaintingEDM if inpainting else Pre_EDM
         self.edm = edm_class(

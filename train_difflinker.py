@@ -96,6 +96,7 @@ def main(args):
         center_of_mass=args.center_of_mass,
         inpainting=args.inpainting,
         anchors_context=anchors_context,
+        graph_type=args.graph_type,
     )
 
     checkpoint_callback = callbacks.ModelCheckpoint(
@@ -197,6 +198,7 @@ if __name__ == '__main__':
     p.add_argument('--wandb_entity', type=str, default='geometric', help='Entity (project) name')
     p.add_argument('--center_of_mass', type=str, default='fragments', help='Where to center the data: fragments | anchors')
     p.add_argument('--inpainting', action='store_true', default=False, help='Inpainting mode (full generation)')
+    p.add_argument('--graph_type', type=str, default='FC', help='FC, 4A, FC-4A, FC-10A-4A')
     p.add_argument('--remove_anchors_context', action='store_true', default=False, help='Remove anchors context')
 
     disable_rdkit_logging()

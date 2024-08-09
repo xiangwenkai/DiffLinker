@@ -37,14 +37,14 @@ def main(args):
     samples_dir = os.path.join(args.logs, 'samples', experiment)
 
     torch_device = 'cuda:0' if args.device == 'gpu' else 'cpu'
-    wandb_logger = loggers.WandbLogger(
-        save_dir=args.logs,
-        project='e3_ddpm_linker_design',
-        name=experiment,
-        id=experiment,
-        resume='must' if args.resume is not None else 'allow',
-        entity=args.wandb_entity,
-    )
+    # wandb_logger = loggers.WandbLogger(
+    #     save_dir=args.logs,
+    #     project='e3_ddpm_linker_design',
+    #     name=experiment,
+    #     id=experiment,
+    #     resume='must' if args.resume is not None else 'allow',
+    #     entity=args.wandb_entity,
+    # )
 
     is_geom = ('geom' in args.train_data_prefix) or ('MOAD' in args.train_data_prefix)
     number_of_atoms = GEOM_NUMBER_OF_ATOM_TYPES if is_geom else NUMBER_OF_ATOM_TYPES
@@ -91,6 +91,7 @@ def main(args):
         center_of_mass=args.center_of_mass,
         inpainting=args.inpainting,
         anchors_context=anchors_context,
+        graph_type=args.graph_type,
     )
     ddpm.edm = DDPM.load_from_checkpoint('models/pockets_difflinker_full_fc_pdb_excluded.ckpt').edm
 
@@ -102,8 +103,8 @@ def main(args):
     )
     trainer = Trainer(
         max_epochs=args.n_epochs,
-        logger=wandb_logger,
-        # logger=False,
+        # logger=wandb_logger,
+        logger=False,
         callbacks=checkpoint_callback,
         accelerator=args.device,
         devices=1,
@@ -193,6 +194,7 @@ if __name__ == '__main__':
     p.add_argument('--wandb_entity', type=str, default='geometric', help='Entity (project) name')
     p.add_argument('--center_of_mass', type=str, default='fragments', help='Where to center the data: fragments | anchors')
     p.add_argument('--inpainting', action='store_true', default=False, help='Inpainting mode (full generation)')
+    p.add_argument('--graph_type', type=str, default='FC', help='FC, 4A, FC-4A, FC-10A-4A')
     p.add_argument('--remove_anchors_context', action='store_true', default=False, help='Remove anchors context')
 
     disable_rdkit_logging()
