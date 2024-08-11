@@ -147,51 +147,121 @@ class DDPM(pl.LightningModule):
         return get_dataloader(self.test_dataset, self.batch_size, collate_fn=collate_fn)
 
     def pre_process(self, batch):
-        keys_to_remove = ['atom_indexes']
+        keys_to_remove = ['pocket_pos', 'pocket_one_hot', 'pocket_charges', 'atom_indexes',
+                          'mol_pos', 'mol_one_hot', 'mol_charges']
         if type(batch) == list:
             batch_copy = copy.deepcopy(batch)
             if 'atom_indexes' in batch_copy[0]:
                 for x in batch_copy:
-                    k = len(x['atom_indexes'])
-                    k_sample = random.randint(0, k-1)
-                    atom_index = x['atom_indexes'][k_sample]
-                    n_frag = len(atom_index)
-                    link_index = list(set([x for x in range(x['num_atoms'])]) - set(atom_index))
-                    atom_index = torch.tensor(atom_index, dtype=int)
-                    # nci_type = x['nci_types'][k_sample]
+                    if 'pocket_pos' in x:
+                        k = len(x['atom_indexes'])
+                        k_sample = random.randint(0, k-1)
+                        atom_index = x['atom_indexes'][k_sample]
+                        n_frag = len(atom_index)
+                        n_poc = len(x['pocket_charges'])
+                        ligand_atoms = x['num_atoms'] - n_poc
+                        link_index = list(set([x for x in range(ligand_atoms)]) - set(atom_index))
+                        atom_index = torch.tensor(atom_index, dtype=int)
+                        # nci_type = x['nci_types'][k_sample]
 
-                    frag_charges = x['charges'][atom_index]
-                    frag_one_hot = x['one_hot'][atom_index]
-                    frag_pos = x['positions'][atom_index]
+                        frag_charges = x['mol_charges'][atom_index]
+                        frag_one_hot = x['mol_one_hot'][atom_index]
+                        frag_pos = x['mol_pos'][atom_index]
 
-                    link_charges = x['charges'][link_index]
-                    link_one_hot = x['one_hot'][link_index]
-                    link_pos = x['positions'][link_index]
+                        link_charges = x['mol_charges'][link_index]
+                        link_one_hot = x['mol_one_hot'][link_index]
+                        link_pos = x['mol_pos'][link_index]
 
-                    x['positions'] = torch.cat([frag_pos, link_pos])
-                    x['one_hot'] = torch.cat([frag_one_hot, link_one_hot])
-                    x['charges'] = torch.cat([frag_charges, link_charges])
+                        x['positions'] = torch.cat([frag_pos, x['pocket_pos'], link_pos])
+                        x['one_hot'] = torch.cat([frag_one_hot, x['pocket_one_hot'], link_one_hot])
+                        x['charges'] = torch.cat([frag_charges, x['pocket_charges'], link_charges])
 
-                    # nci
-                    # nci = torch.zeros_like(x['charges'])
-                    # nci[:len(atom_index)] = torch.tensor(nci_type)
-                    # x['nci'] = nci
-                    # ======================== fragment_mask ========================
-                    x['fragment_mask'] = torch.cat([
-                        torch.ones_like(frag_charges),
-                        torch.zeros_like(link_charges)
-                    ])
+                        # nci
+                        # nci = torch.zeros_like(x['charges'])
+                        # nci[:len(atom_index)] = torch.tensor(nci_type)
+                        # x['nci'] = nci
+                        # ======================== fragment_mask ========================
+                        x['fragment_only_mask'] = torch.cat([
+                            torch.ones_like(frag_charges),
+                            torch.zeros_like(x['pocket_charges']),
+                            torch.zeros_like(link_charges)
+                        ])
 
-                    x['anchors'] = x['fragment_mask'][:]
+                        x['anchors'] = x['fragment_only_mask'][:]
 
-                    # ======================== linker_mask ========================
-                    x['linker_mask'] = torch.cat([
-                        torch.zeros_like(frag_charges),
-                        torch.ones_like(link_charges)
-                    ])
+                        x['pocket_mask'] = torch.cat([
+                            torch.zeros_like(frag_charges),
+                            torch.ones_like(x['pocket_charges']),
+                            torch.zeros_like(link_charges)
+                        ])
+                        x['fragment_mask'] = torch.cat([
+                            torch.ones_like(frag_charges),
+                            torch.ones_like(x['pocket_charges']),
+                            torch.zeros_like(link_charges)
+                        ])
+                        # ======================== linker_mask ========================
+                        x['linker_mask'] = torch.cat([
+                            torch.zeros_like(frag_charges),
+                            torch.zeros_like(x['pocket_charges']),
+                            torch.ones_like(link_charges)
+                        ])
 
-                    for key in keys_to_remove:
-                        del x[key]
+                        x['positions_pre'] = torch.cat([frag_pos, link_pos])
+                        x['one_hot_pre'] = torch.cat([frag_one_hot, link_one_hot])
+                        x['charges_pre'] = torch.cat([frag_charges, link_charges])
+                        x['anchors_pre'] = x['anchors'][:x['num_atoms']]
+                        x['fragment_mask_pre'] = torch.cat(
+                            [torch.ones_like(frag_charges), torch.zeros_like(link_charges)])
+                        x['linker_mask_pre'] = torch.cat(
+                            [torch.zeros_like(frag_charges), torch.ones_like(link_charges)])
+                        # x['nci_pre'] = x['nci'][:x['num_atoms']]
+
+                        # mol index
+                        x['mol_index'] = [n_frag, n_frag + n_poc, n_poc + x['num_atoms']]
+
+                        for key in keys_to_remove:
+                            del x[key]
+                    else:
+                        k = len(x['atom_indexes'])
+                        k_sample = random.randint(0, k - 1)
+                        atom_index = x['atom_indexes'][k_sample]
+                        n_frag = len(atom_index)
+                        link_index = list(set([x for x in range(x['num_atoms'])]) - set(atom_index))
+                        atom_index = torch.tensor(atom_index, dtype=int)
+                        # nci_type = x['nci_types'][k_sample]
+
+                        frag_charges = x['charges'][atom_index]
+                        frag_one_hot = x['one_hot'][atom_index]
+                        frag_pos = x['positions'][atom_index]
+
+                        link_charges = x['charges'][link_index]
+                        link_one_hot = x['one_hot'][link_index]
+                        link_pos = x['positions'][link_index]
+
+                        x['positions'] = torch.cat([frag_pos, link_pos])
+                        x['one_hot'] = torch.cat([frag_one_hot, link_one_hot])
+                        x['charges'] = torch.cat([frag_charges, link_charges])
+
+                        # nci
+                        # nci = torch.zeros_like(x['charges'])
+                        # nci[:len(atom_index)] = torch.tensor(nci_type)
+                        # x['nci'] = nci
+                        # ======================== fragment_mask ========================
+                        x['fragment_mask'] = torch.cat([
+                            torch.ones_like(frag_charges),
+                            torch.zeros_like(link_charges)
+                        ])
+
+                        x['anchors'] = x['fragment_mask'][:]
+
+                        # ======================== linker_mask ========================
+                        x['linker_mask'] = torch.cat([
+                            torch.zeros_like(frag_charges),
+                            torch.ones_like(link_charges)
+                        ])
+
+                        for key in keys_to_remove:
+                            del x[key]
             out = {}
             for i, data in enumerate(batch_copy):
                 for key, value in data.items():
@@ -709,7 +779,7 @@ class Pre_DDPM(pl.LightningModule):
 
     def pre_process(self, batch):
         keys_to_remove = ['pocket_pos', 'pocket_one_hot', 'pocket_charges', 'atom_indexes',
-                          'nci_types', 'mol_pos', 'mol_one_hot', 'mol_charges']
+                          'mol_pos', 'mol_one_hot', 'mol_charges']
         if type(batch) == list:
             batch_copy = copy.deepcopy(batch)
             if 'atom_indexes' in batch_copy[0]:
@@ -718,7 +788,9 @@ class Pre_DDPM(pl.LightningModule):
                     k_sample = random.randint(0, k-1)
                     atom_index = x['atom_indexes'][k_sample]
                     n_frag = len(atom_index)
-                    link_index = list(set([x for x in range(x['num_atoms'])]) - set(atom_index))
+                    n_poc = len(x['pocket_charges'])
+                    ligand_atoms = x['num_atoms'] - n_poc
+                    link_index = list(set([x for x in range(ligand_atoms)]) - set(atom_index))
                     atom_index = torch.tensor(atom_index, dtype=int)
                     # nci_type = x['nci_types'][k_sample]
 
@@ -774,7 +846,6 @@ class Pre_DDPM(pl.LightningModule):
                     # x['nci_pre'] = x['nci'][:x['num_atoms']]
 
                     # mol index
-                    n_poc = len(x['pocket_charges'])
                     x['mol_index'] = [n_frag, n_frag + n_poc, n_poc + x['num_atoms']]
 
                     for key in keys_to_remove:
