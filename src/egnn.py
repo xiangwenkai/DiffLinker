@@ -610,14 +610,14 @@ class Pre_Dynamics(nn.Module):
 
         self.pre_edm = pre_model
         self.gamma = self.pre_edm.gamma
-        # for name, params in self.pre_edm.named_parameters():
-        #     params.requires_grad = False
         for name, params in self.pre_edm.named_parameters():
-            if "embedding_out" in name:
-                params.requires_grad = True
-                print(f"{name} trained")
-            else:
-                params.requires_grad = False
+            params.requires_grad = False
+        # for name, params in self.pre_edm.named_parameters():
+        #     if "embedding_out" in name:
+        #         params.requires_grad = True
+        #         print(f"{name} trained")
+        #     else:
+        #         params.requires_grad = False
 
         in_node_nf = in_node_nf + context_node_nf + condition_time
         if self.model == 'egnn_dynamics':
