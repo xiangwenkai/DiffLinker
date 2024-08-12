@@ -111,7 +111,7 @@ def read_pocket(path):
 
 
 def main(input_path, pocket_path, backbone_atoms_only, model,
-         output_dir, n_samples, n_steps, linker_size, anchors, max_batch_size, nci):
+         output_dir, n_samples, n_steps, linker_size, anchors, max_batch_size):
 
     # Setup
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -206,9 +206,9 @@ def main(input_path, pocket_path, backbone_atoms_only, model,
     if anchors is not None:
         for anchor in anchors.split(','):
             anchor_flags[int(anchor.strip()) - 1] = 1
-    nci_flags = np.zeros_like(frag_charges)  # nci
-    for i, nci_type in enumerate(nci.split(',')):  # nci
-        nci_flags[i] = nci_type  # nci
+    # nci_flags = np.zeros_like(frag_charges)  # nci
+    # for i, nci_type in enumerate(nci.split(',')):  # nci
+    #     nci_flags[i] = nci_type  # nci
 
     fragment_only_mask = np.concatenate([
         np.ones_like(frag_charges),
@@ -239,7 +239,7 @@ def main(input_path, pocket_path, backbone_atoms_only, model,
         'fragment_mask': torch.tensor(fragment_mask, dtype=const.TORCH_FLOAT, device=device),
         'linker_mask': torch.tensor(linker_mask, dtype=const.TORCH_FLOAT, device=device),
         'num_atoms': len(positions),
-        'nci': nci_flags,
+        # 'nci': nci_flags,
     }] * n_samples
     dataset = MOADDataset(data=dataset)
     ddpm.val_dataset = dataset
@@ -301,6 +301,6 @@ if __name__ == '__main__':
         linker_size=args.linker_size,
         anchors=args.anchors,
         max_batch_size=args.max_batch_size,
-        nci=args.nci
+        # nci=args.nci,
     )
 
