@@ -840,7 +840,7 @@ class Pre_DDPM(pl.LightningModule):
                     x['positions_pre'] = torch.cat([frag_pos, link_pos])
                     x['one_hot_pre'] = torch.cat([frag_one_hot, link_one_hot])
                     x['charges_pre'] = torch.cat([frag_charges, link_charges])
-                    x['anchors_pre'] = x['anchors'][:x['num_atoms']]
+                    x['anchors_pre'] = x['anchors'][:x['num_atoms']-n_poc]
                     x['fragment_mask_pre'] = torch.cat([torch.ones_like(frag_charges), torch.zeros_like(link_charges)])
                     x['linker_mask_pre'] = torch.cat([torch.zeros_like(frag_charges), torch.ones_like(link_charges)])
                     # x['nci_pre'] = x['nci'][:x['num_atoms']]
