@@ -202,7 +202,6 @@ if __name__ == '__main__':
     p.add_argument('--inpainting', action='store_true', default=False, help='Inpainting mode (full generation)')
     p.add_argument('--graph_type', type=str, default='FC', help='FC, 4A, FC-4A, FC-10A-4A')
     p.add_argument('--remove_anchors_context', action='store_true', default=False, help='Remove anchors context')
-    p.add_argument('--graph_type', type=str, default='FC', help='FC, 4A, FC-4A, FC-10A-4A')
     p.add_argument('--pretraining_model', action='store_true', default=None, help='Remove anchors context')
 
     disable_rdkit_logging()
