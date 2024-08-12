@@ -55,7 +55,7 @@ def main(args):
     if '.' in args.train_data_prefix:
         context_node_nf += 1
 
-    ddpm_pre = DDPM.load_from_checkpoint('models/geom_difflinker_given_anchors.ckpt')  # ddpm_pre.named_parameters().__next__()
+    ddpm_pre = DDPM.load_from_checkpoint(args.pretraining_model)  # ddpm_pre.named_parameters().__next__()
     ddpm_pre.eval()
 
     ddpm = Pre_DDPM(
@@ -98,7 +98,8 @@ def main(args):
         graph_type=args.graph_type,
     )
 
-    ddpm.edm.dynamics.dynamics = DDPM.load_from_checkpoint('models/pre120.ckpt').edm.dynamics.dynamics
+    print("initialize pocket model...")
+    ddpm.edm.dynamics.dynamics = DDPM.load_from_checkpoint('models/crossdock_pre_init.ckpt').edm.dynamics.dynamics
 
     checkpoint_callback = callbacks.ModelCheckpoint(
         dirpath=checkpoints_dir,
@@ -201,6 +202,8 @@ if __name__ == '__main__':
     p.add_argument('--inpainting', action='store_true', default=False, help='Inpainting mode (full generation)')
     p.add_argument('--graph_type', type=str, default='FC', help='FC, 4A, FC-4A, FC-10A-4A')
     p.add_argument('--remove_anchors_context', action='store_true', default=False, help='Remove anchors context')
+    p.add_argument('--graph_type', type=str, default='FC', help='FC, 4A, FC-4A, FC-10A-4A')
+    p.add_argument('--pretraining_model', action='store_true', default=None, help='Remove anchors context')
 
     disable_rdkit_logging()
 
