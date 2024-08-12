@@ -846,7 +846,7 @@ class Pre_DDPM(pl.LightningModule):
                     # x['nci_pre'] = x['nci'][:x['num_atoms']]
 
                     # mol index
-                    x['mol_index'] = [n_frag, n_frag + n_poc, n_poc + x['num_atoms']]
+                    x['mol_index'] = [n_frag, n_frag + n_poc, x['num_atoms']]
 
                     for key in keys_to_remove:
                         del x[key]
