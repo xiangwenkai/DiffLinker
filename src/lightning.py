@@ -260,8 +260,7 @@ class DDPM(pl.LightningModule):
                             torch.ones_like(link_charges)
                         ])
 
-                        for key in keys_to_remove:
-                            del x[key]
+                        del x['atom_indexes']
             out = {}
             for i, data in enumerate(batch_copy):
                 for key, value in data.items():
